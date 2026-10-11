@@ -1,0 +1,13 @@
+{
+  "id": "office-cooling",
+  "description": "Cool an occupied office when its temperature is high.",
+  "triggers": [
+    {"device": "office-temperature", "state": "above-30-celsius"}
+  ],
+  "conditions": [
+    {"device": "office-occupancy", "state": "occupied"}
+  ],
+  "actions": [
+    {"device": "office-air-conditioner", "state": "cooling-enabled"}
+  ]
+}

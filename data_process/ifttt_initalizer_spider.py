@@ -1,6 +1,6 @@
 import scrapy
-from scrapy.utils.response import open_in_browser
 import json
+from external_config import load_ifttt_credentials
 
 
 # scrapy runspider .\src\data_process\ifttt_initalizer_spider.py
@@ -9,22 +9,18 @@ import json
 class IftttInitalizerSpider(scrapy.Spider):
     name = "ifttt.com"
     start_urls = ["https://ifttt.com/login"]
-    keys_path = "./keys/keys.json"
 
     def __init__(self, *args, **kwargs):
         super(IftttInitalizerSpider, self).__init__(*args, **kwargs)
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
 
-        # load keys
-        with open(self.keys_path, "r") as f:
-            keys = json.load(f)
+        keys = load_ifttt_credentials()
         self.username = keys["username"]
         self.email = keys["email"]
         self.password = keys["password"]
-        self.authorization = keys["private-authorization"]
+        self.authorization = keys["authorization"]
 
     def parse(self, response):
-        # open_in_browser(response)
         # get authenticity token
         # authenticity_token = response.css(
         #     "input[type=hidden]:nth-child(2)::attr(value)"

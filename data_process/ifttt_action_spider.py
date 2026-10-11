@@ -1,12 +1,11 @@
 import scrapy
-from scrapy.utils.response import open_in_browser
 import json
+from external_config import load_ifttt_credentials
 
 
 class IftttActionSpider(scrapy.Spider):
     name = "ifttt.com"
     start_urls = ["https://ifttt.com/login"]
-    keys_path = "./keys/keys.json"
     module_name_path = "./data/module_name.json"
 
     def __init__(self, *args, **kwargs):
@@ -14,20 +13,17 @@ class IftttActionSpider(scrapy.Spider):
 
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
 
-        # load keys
-        with open(self.keys_path, "r") as f:
-            keys = json.load(f)
+        keys = load_ifttt_credentials()
         self.username = keys["username"]
         self.email = keys["email"]
         self.password = keys["password"]
-        self.authorization = keys["private-authorization"]
+        self.authorization = keys["authorization"]
 
         with open(self.module_name_path, "r") as f:
             module_names = json.load(f)
         self.module_name_list = [item["module_name"] for item in module_names]
 
     def parse(self, response):
-        # open_in_browser(response)
         # get authenticity token
         # authenticity_token = response.css(
         #     "input[type=hidden]:nth-child(2)::attr(value)"

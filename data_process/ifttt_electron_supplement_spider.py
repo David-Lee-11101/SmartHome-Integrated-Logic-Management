@@ -1,6 +1,6 @@
 import scrapy
-from scrapy.utils.response import open_in_browser
 import json
+from external_config import load_ifttt_credentials
 
 
 # 在elecreon_json文件里面的每一个操作trigger/action/query加入设备的label与value等信息
@@ -8,7 +8,6 @@ import json
 class IftttElectronSupplementSpider(scrapy.Spider):
     name = "ifttt.com"
     start_urls = ["https://ifttt.com/login"]
-    keys_path = "./keys/keys.json"
     trigger_module_name_path = "./data/electron_json/trigger_device_names.json"
     query_module_name_path = "./data/electron_json/query_device_names.json"
     action_module_name_path = "./data/electron_json/action_device_names.json"
@@ -17,13 +16,11 @@ class IftttElectronSupplementSpider(scrapy.Spider):
         super(IftttElectronSupplementSpider, self).__init__(*args, **kwargs)
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
 
-        # load keys
-        with open(self.keys_path, "r") as f:
-            keys = json.load(f)
+        keys = load_ifttt_credentials()
         self.username = keys["username"]
         self.email = keys["email"]
         self.password = keys["password"]
-        self.authorization = keys["private-authorization"]
+        self.authorization = keys["authorization"]
 
         with open(self.trigger_module_name_path, "r") as f:
             trigger_module_names = json.load(f)
@@ -38,7 +35,6 @@ class IftttElectronSupplementSpider(scrapy.Spider):
         self.action_module_name_list = [item["module_name"] for item in action_module_names]
 
     def parse(self, response):
-        # open_in_browser(response)
 
         yield scrapy.FormRequest.from_response(
             response,

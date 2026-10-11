@@ -1,13 +1,14 @@
 import scrapy
-from scrapy.utils.response import open_in_browser
 import json
-import sys
+if __package__:
+    from .external_config import load_ifttt_credentials
+else:  # Scrapy runspider executes this file directly.
+    from external_config import load_ifttt_credentials
 
 
 class IftttRuleCreater(scrapy.Spider):
     name = "ifttt.com"
     start_urls = ["https://ifttt.com/login"]
-    keys_path = "../.././keys/keys.json"  # 因为对于main.ts来说是在electron文件夹层级调用的
     module_id_path = "../../data/public_module.json"
     module_trigger_field_path = "../../data/trigger_json/"
     module_query_field_path = "../../data/query_json/"
@@ -35,8 +36,6 @@ class IftttRuleCreater(scrapy.Spider):
         self.priority = kwargs["priority"]
         self.rule_name = kwargs["rule_name"]
         self.filter_code = kwargs["filter_code"]
-
-        self.logger.info("received filter code: " + self.filter_code)
 
         # 对于每一个value，需要在首位{}的前后加上”，对于{}内部的每一个”前加上转移符号、
         self.trigger_info_data = json.loads(self.trigger_device_info)
@@ -72,13 +71,11 @@ class IftttRuleCreater(scrapy.Spider):
 
 
         self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
-        # load keys
-        with open(self.keys_path, "r") as f:
-            keys = json.load(f)
+        keys = load_ifttt_credentials()
         self.username = keys["username"]
         self.email = keys["email"]
         self.password = keys["password"]
-        self.authorization = keys["private-authorization"]
+        self.authorization = keys["authorization"]
 
         with open(self.module_id_path, "r") as f:
             module_id_list = json.load(f)
@@ -157,9 +154,9 @@ class IftttRuleCreater(scrapy.Spider):
 
     def check_rule_create(self, response):
         ret_data = response.json()
-        print(ret_data)
-
-        # if "data" in ret_data and "diyAppletCreate" in ret_data["data"] and "errors" in ret_data["data"]["diyAppletCreate"]:
-        #     # 在这里执行子脚本操作，因为字典的所有层次都存在
-        #     if ret_data["data"]["diyAppletCreate"]["errors"] is None:
-        #         print("rule created successfully: " + ret_data["data"]["diyAppletCreate"]["normalized_applet"]["id"])
+        creation = ret_data.get("data", {}).get("diyAppletCreate", {})
+        errors = creation.get("errors")
+        if errors:
+            self.logger.error("IFTTT rule creation returned %d error(s)", len(errors))
+        else:
+            self.logger.info("IFTTT rule creation request completed")

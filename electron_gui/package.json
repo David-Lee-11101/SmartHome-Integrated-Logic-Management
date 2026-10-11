@@ -1,16 +1,19 @@
 {
-  "name": "iot-cri-interpreter",
+  "name": "smartrule-automate-composer",
   "version": "1.0.0",
-  "description": "A tool to grab and integrate IoT rules.",
+  "description": "Experimental Electron interface for composing IoT automation rules.",
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && npm run test:security",
+    "test:security": "node --test test/*.test.js",
     "start": "npm run build && electron ./dist/main.js"
   },
   "author": "weihaodong",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^20.5.0",
-    "electron": "^26.0.0"
+    "electron": "41.10.6",
+    "typescript": "^5.2.2"
   }
 }

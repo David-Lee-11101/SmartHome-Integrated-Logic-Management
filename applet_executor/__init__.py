@@ -1,0 +1,1 @@
+"""SmartRule composer adapters."""
