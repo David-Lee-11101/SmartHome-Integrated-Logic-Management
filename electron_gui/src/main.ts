@@ -1,220 +1,318 @@
-import {app, BrowserWindow, ipcMain} from "electron";
-import path = require("path");
-import {readJsonFile, searchModuleName} from "./json_loader";
+import {app, BrowserWindow, ipcMain, IpcMainEvent, IpcMainInvokeEvent} from "electron";
 import {spawn} from "child_process";
-import { it } from "node:test";
+import path = require("path");
+import {pathToFileURL} from "url";
+import {
+  CatalogItem,
+  isTrustedIpcSender,
+  loadCatalogModule,
+  ModuleEntry,
+  readCatalog,
+  requireAccount,
+  requireCatalogModuleId,
+  requireModuleEntry,
+} from "./json_loader";
 
-//页面变化时发送消息事件
+interface DeviceInfo {
+  label: string;
+  selectedValue: string;
+}
 
 interface PythonArgs {
-    rule_name: string;
-    trigger_device: string;
-    trigger_condition: string;
-    trigger_DAC: string;
-    trigger_device_info: object[];
-
-    query_device: string;
-    query_content: string;
-    query_DAC: string;
-    query_device_info: object[];
-
-    action_device: string;
-    action_execution: string;
-    action_DAC: string;
-    action_device_info: object[];
-
-    filter_code: string;
-
-    is_pro: boolean;
-    priority: string;
+  rule_name: string;
+  trigger_device: string;
+  trigger_condition: string;
+  trigger_DAC: string;
+  trigger_device_info: DeviceInfo[];
+  query_device: string;
+  query_content: string;
+  query_DAC: string;
+  query_device_info: DeviceInfo[];
+  action_device: string;
+  action_execution: string;
+  action_DAC: string;
+  action_device_info: DeviceInfo[];
+  filter_code: string;
+  is_pro: boolean;
+  priority: string;
 }
 
-function runPythonScript(args: PythonArgs) {
-    // 定义要执行的命令和参数
-    const command = "scrapy";
-    const commandArgs = [
-        "runspider",
-        "-a", "trigger_device=" + args.trigger_device,
-        "-a", "trigger_condition=" + args.trigger_condition,
-        "-a", "trigger_DAC=" + args.trigger_DAC,
-        "-a", "trigger_device_info=" + JSON.stringify(args.trigger_device_info),
+type SelectionKind = "trigger" | "query" | "action";
+type IpcEvent = IpcMainEvent | IpcMainInvokeEvent;
 
-        "-a", "query_device=" + args.query_device,
-        "-a", "query_content=" + args.query_content,
-        "-a", "query_DAC=" + args.query_DAC,
-        "-a", "query_device_info=" + JSON.stringify(args.query_device_info),
-
-        "-a", "action_device=" + args.action_device,
-        "-a", "action_execution=" + args.action_execution,
-        "-a", "action_DAC=" + args.action_DAC,
-        "-a", "action_device_info=" + JSON.stringify(args.action_device_info),
-
-        "-a", "is_pro=" + String(args["is_pro"]),
-        "-a", "priority=" + args.priority,
-        "-a", "rule_name=" + args.rule_name,
-        "-a", "filter_code=" + args.filter_code,
-        "../applet_executor/ifttt_rule_creator.py",
-    ];
-
-    const python = spawn(command, commandArgs);
-    python.stdout.on("data", (data) => {
-        console.log(`stdout: ${data.toString()}`);
-    });
-    python.stderr.on("data", (data) => {
-        console.error(`stderr: ${data.toString()}`);
-    });
-    python.on("close", (code) => {
-        console.log(`child process exited with code ${code}`);
-    });
-}
-
-let win: BrowserWindow;
-let trigger_devices = readJsonFile(
-    "../../data/electron_json/trigger_device_names.json"
-);
-let query_devices = readJsonFile(
-    "../../data/electron_json/query_device_names.json"
-);
-let action_devices = readJsonFile(
-    "../../data/electron_json/action_device_names.json"
-);
-
-const createWindow = () => {
-    win = new BrowserWindow({
-        width: 800,
-        height: 600,
-        webPreferences: {
-            preload: path.join(__dirname, "renderer.js"),
-        },
-    });
-    win.loadFile("../assets/index.html");
-    console.log("start!");
+const repositoryRoot = path.resolve(__dirname, "../..");
+const electronDataRoot = path.join(repositoryRoot, "data", "electron_json");
+const moduleRoots: Record<SelectionKind, string> = {
+  trigger: path.join(electronDataRoot, "trigger"),
+  query: path.join(electronDataRoot, "query"),
+  action: path.join(electronDataRoot, "action"),
 };
+const indexHtmlPath = path.resolve(__dirname, "../assets/index.html");
+const trustedRendererUrl = pathToFileURL(indexHtmlPath).toString();
 
-app.whenReady().then(() => {
-    createWindow();
-});
+let win: BrowserWindow | undefined;
+let triggerDevices: CatalogItem[] = [];
+let queryDevices: CatalogItem[] = [];
+let actionDevices: CatalogItem[] = [];
 
-function toCamelCase(str: string): string {
-    return str.replace(/_([a-z])/g, function (g) { return g[1].toUpperCase(); });
+function catalogFor(kind: SelectionKind): CatalogItem[] {
+  if (kind === "trigger") {
+    return triggerDevices;
+  }
+  if (kind === "query") {
+    return queryDevices;
+  }
+  return actionDevices;
 }
 
-ipcMain.on("load_filter_code_option", (event, arg: PythonArgs) => {
-    console.log('refresh_options!!')
-    console.log(arg)
+function requireString(value: unknown, field: string, maximumLength = 4096): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > maximumLength) {
+    throw new Error(`${field} must be a non-empty string of at most ${maximumLength} characters`);
+  }
+  return value;
+}
 
-    let triggerObj = readJsonFile(
-        "../../data/electron_json/trigger/" + arg.trigger_device + ".json"
-    );
-    let trigger_ingredients_name = []
-    let trigger_ingredients = triggerObj.find((item: any) => item.module_name === arg.trigger_condition).ingredients;
-    for(let item of trigger_ingredients) {
-        trigger_ingredients_name.push(item.normalized_name)
+function requireBoundedString(value: unknown, field: string, maximumLength: number): string {
+  if (typeof value !== "string" || value.length > maximumLength) {
+    throw new Error(`${field} must be a string of at most ${maximumLength} characters`);
+  }
+  return value;
+}
+
+function requireRecord(value: unknown, field: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${field} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireDeviceInfo(value: unknown, field: string): DeviceInfo[] {
+  if (!Array.isArray(value) || value.length > 100) {
+    throw new Error(`${field} must be an array with at most 100 entries`);
+  }
+  return value.map((item, index) => {
+    const record = requireRecord(item, `${field}[${index}]`);
+    return {
+      label: requireString(record.label, `${field}[${index}].label`, 256),
+      selectedValue: requireString(record.selectedValue, `${field}[${index}].selectedValue`, 4096),
+    };
+  });
+}
+
+function selectionFrom(
+  value: Record<string, unknown>,
+  kind: SelectionKind,
+): {entries: ModuleEntry[]; entry: ModuleEntry} {
+  const operationField = kind === "trigger"
+    ? "trigger_condition"
+    : kind === "query"
+      ? "query_content"
+      : "action_execution";
+  const accountField = `${kind}_DAC`;
+  const deviceId = requireString(value[`${kind}_device`], `${kind}_device`, 256);
+  const operationId = requireString(value[operationField], operationField, 256);
+  const accountId = requireString(value[accountField], accountField, 256);
+  const entries = loadCatalogModule(moduleRoots[kind], catalogFor(kind), deviceId);
+  const entry = requireModuleEntry(entries, operationId);
+  requireAccount(entry, accountId);
+  return {entries, entry};
+}
+
+function validatePythonArgs(value: unknown): PythonArgs {
+  const record = requireRecord(value, "composer request");
+  selectionFrom(record, "trigger");
+  selectionFrom(record, "query");
+  selectionFrom(record, "action");
+  if (typeof record.is_pro !== "boolean") {
+    throw new Error("is_pro must be a boolean");
+  }
+  return {
+    rule_name: requireString(record.rule_name, "rule_name", 256),
+    trigger_device: requireString(record.trigger_device, "trigger_device", 256),
+    trigger_condition: requireString(record.trigger_condition, "trigger_condition", 256),
+    trigger_DAC: requireString(record.trigger_DAC, "trigger_DAC", 256),
+    trigger_device_info: requireDeviceInfo(record.trigger_device_info, "trigger_device_info"),
+    query_device: requireString(record.query_device, "query_device", 256),
+    query_content: requireString(record.query_content, "query_content", 256),
+    query_DAC: requireString(record.query_DAC, "query_DAC", 256),
+    query_device_info: requireDeviceInfo(record.query_device_info, "query_device_info"),
+    action_device: requireString(record.action_device, "action_device", 256),
+    action_execution: requireString(record.action_execution, "action_execution", 256),
+    action_DAC: requireString(record.action_DAC, "action_DAC", 256),
+    action_device_info: requireDeviceInfo(record.action_device_info, "action_device_info"),
+    filter_code: requireBoundedString(record.filter_code, "filter_code", 100_000),
+    is_pro: record.is_pro,
+    priority: requireString(record.priority, "priority", 32),
+  };
+}
+
+function runPythonScript(args: PythonArgs): void {
+  const spiderPath = path.join(repositoryRoot, "applet_executor", "ifttt_rule_creator.py");
+  const commandArgs = [
+    "runspider",
+    "-a", `trigger_device=${args.trigger_device}`,
+    "-a", `trigger_condition=${args.trigger_condition}`,
+    "-a", `trigger_DAC=${args.trigger_DAC}`,
+    "-a", `trigger_device_info=${JSON.stringify(args.trigger_device_info)}`,
+    "-a", `query_device=${args.query_device}`,
+    "-a", `query_content=${args.query_content}`,
+    "-a", `query_DAC=${args.query_DAC}`,
+    "-a", `query_device_info=${JSON.stringify(args.query_device_info)}`,
+    "-a", `action_device=${args.action_device}`,
+    "-a", `action_execution=${args.action_execution}`,
+    "-a", `action_DAC=${args.action_DAC}`,
+    "-a", `action_device_info=${JSON.stringify(args.action_device_info)}`,
+    "-a", `is_pro=${String(args.is_pro)}`,
+    "-a", `priority=${args.priority}`,
+    "-a", `rule_name=${args.rule_name}`,
+    "-a", `filter_code=${args.filter_code}`,
+    spiderPath,
+  ];
+  const child = spawn("scrapy", commandArgs, {cwd: repositoryRoot});
+  child.stdout.resume();
+  child.stderr.resume();
+  child.on("error", () => console.error("External adapter failed to start."));
+  child.on("close", (code) => console.log(`External adapter exited with status ${String(code)}.`));
+}
+
+function ownedWindow(): BrowserWindow {
+  if (!win || win.isDestroyed()) {
+    throw new Error("composer window is not available");
+  }
+  return win;
+}
+
+function assertTrustedEvent(event: IpcEvent): void {
+  const window = ownedWindow();
+  if (!isTrustedIpcSender(event.sender, event.senderFrame?.url, window.webContents, trustedRendererUrl)) {
+    throw new Error("untrusted IPC sender");
+  }
+}
+
+function trustedOn(channel: string, listener: (event: IpcMainEvent, ...args: unknown[]) => void): void {
+  ipcMain.on(channel, (event, ...args) => {
+    try {
+      assertTrustedEvent(event);
+      listener(event, ...args);
+    } catch {
+      console.warn(`Rejected invalid IPC request on ${channel}.`);
     }
-    win.webContents.send("update_filter_trigger_ingredient", trigger_ingredients_name);
+  });
+}
 
+function trustedHandle(channel: string, listener: (event: IpcMainInvokeEvent) => Promise<string>): void {
+  ipcMain.handle(channel, async (event) => {
+    assertTrustedEvent(event);
+    return listener(event);
+  });
+}
 
-    let actionObj = readJsonFile(
-        "../../data/electron_json/action/" + arg.action_device + ".json"
-    );
-    let action_options_name = [toCamelCase(arg.action_execution) + ".skip()"]
-    win.webContents.send("update_filter_action_options", action_options_name);
+function toCamelCase(value: string): string {
+  return value.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+}
 
-    let queryObj = readJsonFile(
-        "../../data/electron_json/query/" + arg.query_device + ".json"
-    );
-    let query_ingredients_name = []
-    let query_ingredients = queryObj.find((item: any) => item.module_name === arg.query_content).ingredients;
-    for(let item of query_ingredients) {
-        query_ingredients_name.push(item.normalized_name)
+function moduleSelection(
+  kind: SelectionKind,
+  moduleIdValue: unknown,
+  operationIdValue: unknown,
+  accountIdValue: unknown,
+): ModuleEntry[] {
+  const moduleId = requireString(moduleIdValue, `${kind} module id`, 256);
+  const operationId = requireString(operationIdValue, `${kind} operation id`, 256);
+  const accountId = requireString(accountIdValue, `${kind} account id`, 256);
+  const entries = loadCatalogModule(moduleRoots[kind], catalogFor(kind), moduleId);
+  const entry = requireModuleEntry(entries, operationId);
+  requireAccount(entry, accountId);
+  return entries;
+}
+
+function loadCatalogs(): void {
+  triggerDevices = readCatalog(electronDataRoot, "trigger_device_names.json");
+  queryDevices = readCatalog(electronDataRoot, "query_device_names.json");
+  actionDevices = readCatalog(electronDataRoot, "action_device_names.json");
+}
+
+function createWindow(): void {
+  loadCatalogs();
+  win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, "renderer.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  win.webContents.setWindowOpenHandler(() => ({action: "deny"}));
+  win.webContents.on("will-navigate", (event, url) => {
+    if (url !== trustedRendererUrl) {
+      event.preventDefault();
     }
-    win.webContents.send("update_filter_query_ingredients", query_ingredients_name);
-})
+  });
+  void win.loadFile(indexHtmlPath);
+}
 
-//这个args是输入栏里的每一项参数
-ipcMain.on("start_button_click", (event, arg) => {
-    console.log("start!");
-    // console.log(arg);
-    runPythonScript(arg);
-});
-//trigger_devices是所有名字的集合体
-ipcMain.on("refresh_button_click", () => {
-    win.webContents.send("load_trigger_devices", trigger_devices);
-    win.webContents.send("load_query_devices", query_devices);
-    win.webContents.send("load_action_devices", action_devices);
-});
+app.whenReady().then(createWindow);
 
-ipcMain.on("trigger_device_change", (event, arg) => {
-    let module_name = searchModuleName(trigger_devices, arg);
-    let nameObj = readJsonFile(
-        "../../data/electron_json/trigger/" + module_name + ".json"
-    );
-    win.webContents.send("update-trigger-condition", nameObj);
-});
-
-ipcMain.on("query_device_change", (event, arg) => {
-    let module_name = searchModuleName(query_devices, arg);
-    let nameObj = readJsonFile(
-        "../../data/electron_json/query/" + module_name + ".json"
-    );
-    win.webContents.send("update-query-content", nameObj);
+trustedOn("load_filter_code_option", (_event, value) => {
+  const record = requireRecord(value, "filter option request");
+  const trigger = selectionFrom(record, "trigger").entry;
+  const query = selectionFrom(record, "query").entry;
+  const action = selectionFrom(record, "action").entry;
+  ownedWindow().webContents.send(
+    "update_filter_trigger_ingredient",
+    (trigger.ingredients ?? []).map((item) => item.normalized_name),
+  );
+  ownedWindow().webContents.send(
+    "update_filter_query_ingredients",
+    (query.ingredients ?? []).map((item) => item.normalized_name),
+  );
+  ownedWindow().webContents.send(
+    "update_filter_action_options",
+    [`${toCamelCase(action.module_name)}.skip()`],
+  );
 });
 
-ipcMain.on("action_device_change", (event, arg) => {
-    let module_name = searchModuleName(action_devices, arg);
-    let nameObj = readJsonFile(
-        "../../data/electron_json/action/" + module_name + ".json"
-    );
-    win.webContents.send("update-action-execution", nameObj);
+trustedOn("start_button_click", (_event, value) => runPythonScript(validatePythonArgs(value)));
+
+trustedOn("refresh_button_click", () => {
+  const window = ownedWindow();
+  window.webContents.send("load_trigger_devices", triggerDevices);
+  window.webContents.send("load_query_devices", queryDevices);
+  window.webContents.send("load_action_devices", actionDevices);
 });
 
-ipcMain.on("trigger_condition_change", (event, select_trigger, select_trigger_condition, select_account) => {
-    let trigger_json = readJsonFile(
-        "../../data/electron_json/trigger/" + select_trigger + ".json"
-    );
-    win.webContents.send("update-trigger-device-info", trigger_json, select_trigger_condition, select_account);
+trustedOn("trigger_device_change", (_event, displayName) => {
+  const moduleId = requireCatalogModuleId(triggerDevices, requireString(displayName, "trigger display name", 256));
+  ownedWindow().webContents.send("update-trigger-condition", loadCatalogModule(moduleRoots.trigger, triggerDevices, moduleId));
 });
 
-ipcMain.on("query_content_change", (event, select_query, select_query_content, select_account) => {
-    let query_json = readJsonFile(
-        "../../data/electron_json/query/" + select_query + ".json"
-    );
-    win.webContents.send("update-query-device-info", query_json, select_query_content, select_account);
+trustedOn("query_device_change", (_event, displayName) => {
+  const moduleId = requireCatalogModuleId(queryDevices, requireString(displayName, "query display name", 256));
+  ownedWindow().webContents.send("update-query-content", loadCatalogModule(moduleRoots.query, queryDevices, moduleId));
 });
 
-ipcMain.on("action_execution_change", (event, select_action, select_action_execution, select_account) => {
-    let action_json = readJsonFile(
-        "../../data/electron_json/action/" + select_action + ".json"
-    );
-    win.webContents.send("update-action-device-info", action_json, select_action_execution, select_account);
+trustedOn("action_device_change", (_event, displayName) => {
+  const moduleId = requireCatalogModuleId(actionDevices, requireString(displayName, "action display name", 256));
+  ownedWindow().webContents.send("update-action-execution", loadCatalogModule(moduleRoots.action, actionDevices, moduleId));
 });
 
+for (const [channel, kind, response] of [
+  ["trigger_condition_change", "trigger", "update-trigger-device-info"],
+  ["trigger_DAC_change", "trigger", "update-trigger-device-info"],
+  ["query_content_change", "query", "update-query-device-info"],
+  ["query_DAC_change", "query", "update-query-device-info"],
+  ["action_execution_change", "action", "update-action-device-info"],
+  ["action_DAC_change", "action", "update-action-device-info"],
+] as const) {
+  trustedOn(channel, (_event, moduleId, operationId, accountId) => {
+    const entries = moduleSelection(kind, moduleId, operationId, accountId);
+    ownedWindow().webContents.send(response, entries, operationId, accountId);
+  });
+}
 
-ipcMain.on("trigger_DAC_change", (event, select_trigger, select_trigger_condition, select_account) => {
-    //此处可以直接传value值而不是text值
-    let trigger_json = readJsonFile(
-        "../../data/electron_json/trigger/" + select_trigger + ".json"
-    );
-    win.webContents.send("update-trigger-device-info", trigger_json, select_trigger_condition, select_account);
+trustedHandle("getEditorContent", async (event) => {
+  const result = await event.sender.executeJavaScript("window.getEditorContent()", true);
+  return String(result);
 });
-
-ipcMain.on("query_DAC_change", (event, select_query, select_query_content, select_account) => {
-    let query_json = readJsonFile(
-        "../../data/electron_json/query/" + select_query + ".json"
-    );
-    win.webContents.send("update-query-device-info", query_json, select_query_content, select_account);
-});
-
-ipcMain.on("action_DAC_change", (event, select_action, select_action_execution, select_account) => {
-    let action_json = readJsonFile(
-        "../../data/electron_json/action/" + select_action + ".json"
-    );
-    win.webContents.send("update-action-device-info", action_json, select_action_execution, select_account);
-});
-
-ipcMain.handle('getEditorContent', async (event) => {
-    let win = BrowserWindow.getFocusedWindow(); // 获取当前聚焦的窗口
-    let result = await win.webContents.executeJavaScript('window.getEditorContent()');
-    return String(result);
-});
-

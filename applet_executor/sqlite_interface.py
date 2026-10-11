@@ -1,101 +1,66 @@
 import sqlite3
+from pathlib import Path
+from typing import Optional, Union
 
 
 class SqliteInterface:
-    def __init__(self) -> None:
-        # connect sqlite database
-        self.conn = sqlite3.connect("../../data/rules.db")
-        c = self.conn.cursor()
+    COLUMNS = (
+        "trigger_device", "trigger_condition", "query_device", "query_content",
+        "action_device", "action_action", "is_pro", "priority",
+    )
 
-        c.execute("PRAGMA table_info(rule_table)")
-        columns = c.fetchall()
-        required_columns = {
-            "trigger_device",
-            "trigger_condition",
-            "query_device",
-            "query_content",
-            "action_device",
-            "action_execution",
-            "is_pro",
-            "priority",
-        }
-        actual_columns = {column[1] for column in columns}
+    def __init__(self, database: Optional[Union[str, Path]] = None) -> None:
+        database_path = Path(database) if database else Path("data/rules.db")
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(database_path))
+        columns = self.conn.execute("PRAGMA table_info(rule_table)").fetchall()
+        existing_columns = tuple(column[1] for column in columns)
+        if not existing_columns:
+            self._create_schema()
+        elif existing_columns != self.COLUMNS:
+            self.conn.close()
+            raise RuntimeError(
+                "rule_table schema requires an explicit migration; existing data was preserved. "
+                "Back up and migrate the table before reopening it."
+            )
 
-        # check whether the database is valid
-        if required_columns.issubset(actual_columns):
-            print("The database is valid.")
-        else:
-            print("The database is invalid.")
-            self.reconstruct()
-
-    def reconstruct(self):
-        # clear all content in the database
-        c = self.conn.cursor()
-        c.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = c.fetchall()
-        for table in tables:
-            c.execute(f"DROP TABLE IF EXISTS {table[0]}")
-        c.execute("SELECT name FROM sqlite_master WHERE type='index'")
-        indices = c.fetchall()
-        for index in indices:
-            c.execute(f"DROP INDEX IF EXISTS {index[0]}")
-        self.conn.commit()
-
-        # construct new content
-        c.execute(
-            """CREATE TABLE rule_table(trigger_device text, trigger_condition text, query_device text, query_content text, action_device text, action_action text, is_pro integer, priority integer)"""
+    def _create_schema(self) -> None:
+        self.conn.execute(
+            """CREATE TABLE rule_table(
+                trigger_device TEXT NOT NULL,
+                trigger_condition TEXT NOT NULL,
+                query_device TEXT NOT NULL,
+                query_content TEXT NOT NULL,
+                action_device TEXT NOT NULL,
+                action_action TEXT NOT NULL,
+                is_pro INTEGER NOT NULL,
+                priority INTEGER NOT NULL
+            )"""
         )
         self.conn.commit()
 
-    def query(self):
-        c = self.conn.cursor()
-        c.execute("SELECT * FROM rule_table")
+    def query_all(self):
+        return self.conn.execute("SELECT * FROM rule_table ORDER BY rowid").fetchall()
 
-        rows = c.fetchall()
-
-        for row in rows:
+    def query(self) -> None:
+        for row in self.query_all():
             print(row)
 
-    def add_applet(
-        self,
-        trigger_device,
-        trigger_condition,
-        query_device,
-        query_content,
-        action_device,
-        action_action,
-        is_pro,
-        priority,
-    ):
-        if is_pro == "true":
-            is_pro = 1
-        else:
-            is_pro = 0
-        c = self.conn.cursor()
-        c.execute(
-            "INSERT INTO rule_table VALUES ('"
-            + trigger_device
-            + "','"
-            + trigger_condition
-            + "','"
-            + query_device
-            + "','"
-            + query_content
-            + "','"
-            + action_device
-            + "','"
-            + action_action
-            + "',"
-            + str(is_pro)
-            + ","
-            + str(priority)
-            + ")"
+    def add_applet(self, trigger_device, trigger_condition, query_device, query_content,
+                   action_device, action_action, is_pro, priority) -> None:
+        pro_value = 1 if is_pro is True or str(is_pro).lower() == "true" else 0
+        self.conn.execute(
+            "INSERT INTO rule_table VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (trigger_device, trigger_condition, query_device, query_content,
+             action_device, action_action, pro_value, int(priority)),
         )
-
         self.conn.commit()
 
+    def close(self) -> None:
+        self.conn.close()
 
-if __name__ == "__main__":
-    sql = SqliteInterface()
-    sql.add_applet("a", "b", "c", "d", 1, 1)
-    # sql.query()
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exception_type, _exception, _traceback):
+        self.close()

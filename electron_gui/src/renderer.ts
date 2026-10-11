@@ -134,8 +134,6 @@ async function getAllSelects() {
     let filter_code = await ipcRenderer.invoke('getEditorContent').then((content) => {
         return String(content)
     });
-    console.log("filter_code: " + filter_code)
-
     let rule_name = document.getElementById("rule_name_input") as HTMLInputElement;
     let is_pro = document.getElementById("pro_chk") as HTMLInputElement;
     let priority = document.getElementById("priority") as HTMLSelectElement;
