@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld("management", {
     generateService: (request: unknown) => ipcRenderer.invoke("management:generate-service", request),
     readEvidenceSnapshot: () => ipcRenderer.invoke("management:evidence-snapshot"),
 });
-ipcRenderer.send("management:preload-ready");
+ipcRenderer.send("management:preload-ready", process.sandboxed === true, process.contextIsolated === true);
 
 //规定了逻辑处理函数与页面元素变化时接收通知并处理
 

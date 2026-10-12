@@ -71,7 +71,7 @@ npm audit --audit-level=high
 ```
 
 For the full local provider proof, set `MANAGEMENT_JAVA`, `MANAGEMENT_MAVEN`,
-`MANAGEMENT_MAVEN_SETTINGS`, and `MANAGEMENT_MAVEN_REPOSITORY`, then run:
+`MANAGEMENT_MAVEN_SETTINGS`, and `MANAGEMENT_MAVEN_REPOSITORY` (plus `MANAGEMENT_MAVEN_HOME` on Windows), then run:
 
 ```bash
 npm run verify:pipeline -- --output pipeline-proof.json --descriptor-output service-descriptor.json

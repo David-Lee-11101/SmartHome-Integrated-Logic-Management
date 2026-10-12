@@ -121,6 +121,11 @@ jobs:
           sudo chmod 4755 electron_gui/node_modules/electron/dist/chrome-sandbox
           test "$(stat -c '%a' electron_gui/node_modules/electron/dist/chrome-sandbox)" = "4755"
 
+      - name: Resolve the native Maven home on Windows
+        if: runner.os == 'Windows'
+        run: |
+          python -c 'import os,pathlib,shutil; executable=shutil.which("mvn.cmd"); assert executable, "Maven is missing"; home=pathlib.Path(executable).resolve().parent.parent; assert (home/"bin"/"m2.conf").is_file(); open(os.environ["GITHUB_ENV"], "a", encoding="utf-8").write("MANAGEMENT_MAVEN_HOME=" + str(home) + "\n")'
+
       - name: Verify generated provider, local catalog, Logic Engine, and TinyRPC invocation
         env:
           MANAGEMENT_JAVA: java

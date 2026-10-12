@@ -7,7 +7,7 @@ const report = JSON.parse(fs.readFileSync(path.resolve(process.argv[reportIndex 
 const modeIndex = process.argv.indexOf("--mode");
 const mode = modeIndex >= 0 ? process.argv[modeIndex + 1] : "packaged";
 if (mode !== "packaged" && mode !== "native") throw new Error("--mode must be packaged or native");
-const expectedFields = {status: "ready", didFinishLoad: true, preloadIpcReady: true, offline: true, externalAdaptersEnabled: false, workspaceState: "empty", packaged: mode === "packaged", resourcesPathVerified: mode === "packaged"};
+const expectedFields = {status: "ready", didFinishLoad: true, preloadIpcReady: true, rendererSandboxed: true, contextIsolation: true, offline: true, externalAdaptersEnabled: false, workspaceState: "empty", packaged: mode === "packaged", resourcesPathVerified: mode === "packaged"};
 if (mode === "packaged") expectedFields.packagedAppPathVerified = true;
 for (const [field, expected] of Object.entries(expectedFields)) {
   if (report[field] !== expected) throw new Error(`self-check field ${field} did not match the required value`);

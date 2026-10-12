@@ -260,6 +260,8 @@ function loadCatalogs(): void {
 }
 
 let preloadReady = false;
+let rendererSandboxed = false;
+let rendererContextIsolated = false;
 let windowLoaded = false;
 
 function writeSelfCheckReport(): void {
@@ -281,6 +283,8 @@ function writeSelfCheckReport(): void {
     status: "ready",
     didFinishLoad: true,
     preloadIpcReady: true,
+    rendererSandboxed,
+    contextIsolation: rendererContextIsolated,
     offline: true,
     externalAdaptersEnabled,
     workspaceState: workspaceEntries.length === 0 ? "empty" : "non-empty",
@@ -297,8 +301,11 @@ function writeSelfCheckReport(): void {
   setImmediate(() => app.quit());
 }
 
-ipcMain.on("management:preload-ready", (event) => {
+ipcMain.on("management:preload-ready", (event, sandboxed: unknown, contextIsolated: unknown) => {
   if (!win || event.sender !== win.webContents) return;
+  if (sandboxed !== true || contextIsolated !== true) throw new Error("renderer sandbox was not enabled");
+  rendererSandboxed = true;
+  rendererContextIsolated = true;
   preloadReady = true;
   writeSelfCheckReport();
 });

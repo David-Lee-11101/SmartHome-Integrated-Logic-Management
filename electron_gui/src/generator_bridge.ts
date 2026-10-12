@@ -216,7 +216,22 @@ export async function startGeneratedService(applicationRoot: string, workspaceRo
   const generationManifest = JSON.parse(generationOutput) as Record<string, unknown>;
   const projectRoot = path.join(outputRoot, request.projectName);
   const mavenArgs = ["-s", path.resolve(settings), `-Dmaven.repo.local=${path.resolve(localRepository)}`, "package"];
-  await runBounded(maven, mavenArgs, projectRoot, 180000);
+  if (process.platform === "win32") {
+    // Maven's Windows launcher is a batch file, not a native executable. Invoke
+    // its installed Java launcher directly so renderer values never reach a shell.
+    const mavenHome = process.env.MANAGEMENT_MAVEN_HOME;
+    if (!mavenHome) throw new Error("MANAGEMENT_MAVEN_HOME is required on Windows");
+    const home = path.resolve(mavenHome);
+    const boot = path.join(home, "boot");
+    const launchers = fs.readdirSync(boot).filter(file => /^plexus-classworlds-[\w.-]+\.jar$/.test(file));
+    if (launchers.length !== 1) throw new Error("Maven Java launcher is missing or ambiguous");
+    await runBounded(java, ["-cp", path.join(boot, launchers[0]), `-Dmaven.home=${home}`,
+      `-Dclassworlds.conf=${path.join(home, "bin", "m2.conf")}`,
+      `-Dmaven.multiModuleProjectDirectory=${projectRoot}`, "org.codehaus.plexus.classworlds.launcher.Launcher",
+      ...mavenArgs], projectRoot, 180000);
+  } else {
+    await runBounded(maven, mavenArgs, projectRoot, 180000);
+  }
   const classpath = [path.join(projectRoot, "target", "classes"), path.join(projectRoot, "target", "dependency", "*")].join(path.delimiter);
   const mainClass = `${request.packageName}.${request.className}`;
   const providerProcess = spawn(java, ["-cp", classpath, mainClass, "0"], {cwd: projectRoot, shell: false, env: process.env});
