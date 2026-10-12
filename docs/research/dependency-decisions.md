@@ -20,7 +20,8 @@ runtime architecture before doing any build work. GitHub's runner-image announce
 identifies `macos-15` as the Apple Silicon label for GitHub Actions; the assertion keeps
 the gate closed if routing changes. Electron 44 exposes an explicit binary installer instead of an npm postinstall script.
 CI runs the pinned package's `install.js` after `npm ci`, then checks and enables the
-normal Linux setuid Chromium sandbox helper. No global AppArmor or kernel restriction
+normal Linux setuid Chromium sandbox helper. The copied unpacked helper is also
+assigned root ownership and mode 4755 before the package smoke check. No global AppArmor or kernel restriction
 is changed, and no sandbox-disabling switch is passed.
 
 JDK 21 supplies a native ARM64 runtime on macOS; generators retain Java 8 source/target

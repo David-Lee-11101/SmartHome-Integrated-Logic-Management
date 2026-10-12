@@ -147,6 +147,11 @@ jobs:
       - name: Build the complete host runtime and start its production resources/app
         run: |
           node tools/package-unpacked.mjs --output "$RUNNER_TEMP/management-package"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo chown root:root "$RUNNER_TEMP/management-package/chrome-sandbox"
+            sudo chmod 4755 "$RUNNER_TEMP/management-package/chrome-sandbox"
+            test "$(stat -c '%u:%a' "$RUNNER_TEMP/management-package/chrome-sandbox")" = "0:4755"
+          fi
           node tools/run-package-smoke.mjs --package "$RUNNER_TEMP/management-package" --report-output "$RUNNER_TEMP/packaged-self-check.json"
           node tools/verify-package-report.mjs --mode packaged --report "$RUNNER_TEMP/packaged-self-check.json"
         working-directory: electron_gui
