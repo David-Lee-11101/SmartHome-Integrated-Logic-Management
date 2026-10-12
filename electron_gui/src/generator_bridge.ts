@@ -40,6 +40,9 @@ const javaReservedWords = new Set(("abstract assert boolean break byte case catc
   + "native new package private protected public return short static strictfp super switch synchronized this throw "
   + "throws transient try void volatile while true false null _").split(" "));
 
+const objectFinalNoArgMethods = new Set(["getClass", "notify", "notifyAll", "wait"]);
+const objectReturnTypes: Record<string, string> = {toString: "STRING", hashCode: "INT", clone: "STRING"};
+
 const valueTypes = new Set(["BOOLEAN", "INT", "LONG", "DOUBLE", "STRING"]);
 
 function bounded(value: unknown, field: string, maximum: number, pattern?: RegExp): string {
@@ -78,6 +81,10 @@ export function validateLocalServiceRequest(value: unknown): LocalServiceRequest
   if (!valueTypes.has(type)) throw new Error("valueType is unsupported");
   const operation = bounded(record.operation, "operation", 64, identifier);
   if (javaReservedWords.has(operation)) throw new Error("operation is a Java reserved word");
+  const inheritedReturn = Object.prototype.hasOwnProperty.call(objectReturnTypes, operation) ? objectReturnTypes[operation] : undefined;
+  if (objectFinalNoArgMethods.has(operation) || operation === "finalize" || (inheritedReturn !== undefined && inheritedReturn !== type)) {
+    throw new Error("operation conflicts with an inherited Object no-argument method");
+  }
   return {
     ...identity,
     behavior,

@@ -35,3 +35,9 @@ and compile/start/invoke a real generated INT service returning decimal 12 for "
 Identifier boundary review: reject reserved Java words in method names and every
 package segment before generation, in both renderer request validation and Java model
 validation. Preserve valid contextual names such as the method name "record".
+
+Object method signature review: constant operation templates emit public no-argument
+methods. Reproduce inherited final/incompatible return signatures with the actual
+generated method and JavaCompiler before repair; reject these at Java and desktop
+request boundaries before publication. Preserve toString/STRING, hashCode/INT,
+clone/STRING covariant return, and nonconflicting equals() no-argument overload.

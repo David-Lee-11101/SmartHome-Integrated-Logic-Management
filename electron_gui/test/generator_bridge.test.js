@@ -49,6 +49,18 @@ test("local service request rejects command, path, and arbitrary-source injectio
   assert.throws(() => validateLocalServiceRequest({...stateful, initialEnabled: true}));
 });
 
+test("constant operation names preserve compilable Object overrides and reject incompatible noarg signatures", () => {
+  for (const [operation, valueType, value] of [["toString", "STRING", "example"], ["hashCode", "INT", "1"],
+      ["clone", "STRING", "example"], ["equals", "BOOLEAN", "true"]]) {
+    assert.equal(validateLocalServiceRequest({...valid, operation, valueType, value}).operation, operation);
+  }
+  for (const [operation, valueType, value] of [["getClass", "BOOLEAN", "true"], ["notify", "INT", "1"],
+      ["notifyAll", "STRING", "example"], ["wait", "DOUBLE", "1"], ["finalize", "LONG", "1"],
+      ["toString", "INT", "1"], ["hashCode", "LONG", "1"], ["clone", "BOOLEAN", "true"]]) {
+    assert.throws(() => validateLocalServiceRequest({...valid, operation, valueType, value}), /inherited Object/);
+  }
+});
+
 test("pipeline subprocesses use argument arrays with bounded output and no shell", () => {
   const source = fs.readFileSync(path.join(__dirname, "../src/generator_bridge.ts"), "utf8");
   assert.match(source, /shell: false/);
