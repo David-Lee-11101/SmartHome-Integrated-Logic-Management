@@ -191,7 +191,7 @@ function writeCatalog(workspaceRoot: string, provider: Record<string, unknown>, 
   const operations = request.behavior === "STATEFUL_BOOLEAN_DEVICE_V1"
     ? ["setEnabled", "readEnabled", "readActionCount"]
     : [request.operation];
-  const catalog = {schemaVersion: "1.0.2", catalogId: "local.catalog", services: operations.map(operation => ({serviceId: request.serviceId, operation, host: provider.host, port: provider.port, transport: "tiny-rpc-json-line"}))};
+  const catalog = {schemaVersion: "1.0.2", catalogId: "local.catalog", services: operations.map(operation => ({serviceId: request.serviceId, operation, host: provider.host, port: provider.port, transport: "tiny-rpc-netty"}))};
   fs.writeFileSync(temporary, JSON.stringify(catalog, null, 2) + "\n", {flag: "wx"});
   fs.renameSync(temporary, catalogPath);
 }
