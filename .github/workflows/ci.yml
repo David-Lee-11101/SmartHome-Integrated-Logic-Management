@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  COMMUNICATION_COMMIT: 83ffe6d77bf4cd249db863f4df1e9597938b59ad
+  COMMUNICATION_COMMIT: a125ff4bebb692c7d043a69307ae223525b97cd7
   LOGIC_ENGINE_COMMIT: 971693b4cec8057239d6e742f958b61c83801781
   CONTRACT_HUB_COMMIT: 6cb2edb1e9dbfa1572fd6f24f01cd1aef9315f8d
   CONTRACT_API_SHA256: 60284b3ce107b0948626356dcc6a6841a8c9550dbe8a5970126ad097f1dadf1a
@@ -69,7 +69,7 @@ jobs:
       - name: Check out Communication at its pinned commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
-          repository: David-Lee-11101/Handwritten-Netty-RPC
+          repository: David-Lee-11101/Smart-Home-Communication
           ref: ${{ env.COMMUNICATION_COMMIT }}
           path: _components/communication
           fetch-depth: 1
@@ -77,7 +77,7 @@ jobs:
       - name: Check out Logic Engine at its pinned commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
-          repository: David-Lee-11101/SmartService-Discovery-RPC
+          repository: David-Lee-11101/SmartHome-Logic-Engine
           ref: ${{ env.LOGIC_ENGINE_COMMIT }}
           path: _components/logic-engine
           fetch-depth: 1
