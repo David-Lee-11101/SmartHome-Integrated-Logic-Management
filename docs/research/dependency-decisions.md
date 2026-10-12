@@ -30,3 +30,12 @@ compatibility. The workflow does not claim to execute a Java 8 ARM64 runtime.
 
 All action dependencies are pinned by immutable commit SHA. The workflow checks the
 Management, Communication, and Logic Engine heads before compiling from source.
+
+## Runtime dependency closure
+
+Management's host matrix builds `tiny-rpc-netty` with its core/codec/telemetry
+reactor prerequisites and `logic-engine-tiny-rpc-adapter` with its core prerequisite.
+Every selected module runs its tests. Historical Consumer/Provider examples and
+registry adapters are not in generated providers' runtime closure; full component
+governance and legacy regression checks belong to the component repositories.
+This gate proves the management application and its current dependencies only.

@@ -90,12 +90,12 @@ jobs:
       - name: Run offline composer regressions
         run: python -m unittest discover -s tests -v
 
-      - name: Install Communication from source
-        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" install
+      - name: Install current Communication dependency closure from source
+        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" -pl tiny-rpc-netty -am install
         working-directory: _components/communication
 
-      - name: Install Logic Engine and TinyRPC adapter from source
-        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" -DtinyRpcAdapter install
+      - name: Install current Logic Engine and TinyRPC adapter closure from source
+        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" -DtinyRpcAdapter -pl logic-engine-tiny-rpc-adapter -am install
         working-directory: _components/logic-engine
 
       - name: Build and test the confined generator
