@@ -64,3 +64,18 @@ reviewed production closure under the standard `resources/app` location. Electro
 Chromium license files, locales, resources, and native runtime names are preserved.
 The package manifest hashes the delivered runtime tree and identifies the exact source
 commit, Electron version, host OS, and architecture.
+
+## Generated service lifecycle
+
+The cold-source runner may import `startGeneratedService` from the built
+`electron_gui/dist/generator_bridge.js`. It uses the same validated request, confined
+generator, Maven compilation, loopback startup, and catalog registration as the desktop
+pipeline. The returned session exposes `provider`, `generationManifest`, `catalogId`,
+`invoke(operation, argumentsJson = "[]")`, and `close()`. The caller must invoke
+`close()` in a `finally` block. Startup failures terminate the provider automatically.
+
+`generateBuildStartInvoke` reuses this session to perform independent state/count RPC
+reads, concurrency/rejection checks, and bounded shutdown. It never substitutes a
+caller-owned counter for the generated provider's counter. Management evidence is read
+through `readEvidenceSnapshot(workspaceRoot)` from the four fixed JSON files beneath
+`workspaceRoot/evidence`; absent files remain explicitly absent.

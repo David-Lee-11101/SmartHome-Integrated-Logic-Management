@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import {spawnSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 
 const reportIndex = process.argv.indexOf("--report");
 if (reportIndex < 0 || !process.argv[reportIndex + 1]) throw new Error("--report is required");
@@ -13,5 +15,8 @@ for (const [field, expected] of Object.entries(expectedFields)) {
   if (report[field] !== expected) throw new Error(`self-check field ${field} did not match the required value`);
 }
 if (!/^[0-9a-f]{40}$/.test(report.head)) throw new Error("self-check did not report an exact head");
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const git = spawnSync("git", ["rev-parse", "HEAD"], {cwd: repositoryRoot, encoding: "utf8"});
+if (git.status !== 0 || report.head !== git.stdout.trim()) throw new Error("self-check exact head differs from the candidate");
 if (report.platform !== process.platform || report.arch !== process.arch) throw new Error("self-check host identity mismatch");
 process.stdout.write(JSON.stringify({status: "verified", mode, head: report.head, electron: report.electron, platform: report.platform, arch: report.arch}) + "\n");
