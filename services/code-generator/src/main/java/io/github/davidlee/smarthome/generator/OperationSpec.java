@@ -1,6 +1,7 @@
 package io.github.davidlee.smarthome.generator;
 
 import java.util.Locale;
+import javax.lang.model.SourceVersion;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -20,7 +21,8 @@ public final class OperationSpec {
     private final String literalValue;
 
     public OperationSpec(String name, ValueType valueType, String literalValue) {
-        if (name == null || !JAVA_IDENTIFIER.matcher(name).matches() || name.length() > 64) {
+        if (name == null || !JAVA_IDENTIFIER.matcher(name).matches() || name.length() > 64
+                || SourceVersion.isKeyword(name) || "_".equals(name)) {
             throw new IllegalArgumentException("operation name must be a Java identifier of at most 64 characters");
         }
         this.name = name;

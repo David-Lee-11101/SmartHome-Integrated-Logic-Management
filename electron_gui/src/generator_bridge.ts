@@ -35,6 +35,11 @@ const projectName = /^[a-z][a-z0-9-]{0,62}$/;
 const serviceId = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const packageName = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 const className = /^[A-Z][A-Za-z0-9]{0,63}$/;
+const javaReservedWords = new Set(("abstract assert boolean break byte case catch char class const continue default "
+  + "do double else enum extends final finally float for goto if implements import instanceof int interface long "
+  + "native new package private protected public return short static strictfp super switch synchronized this throw "
+  + "throws transient try void volatile while true false null _").split(" "));
+
 const valueTypes = new Set(["BOOLEAN", "INT", "LONG", "DOUBLE", "STRING"]);
 
 function bounded(value: unknown, field: string, maximum: number, pattern?: RegExp): string {
@@ -58,6 +63,9 @@ export function validateLocalServiceRequest(value: unknown): LocalServiceRequest
     packageName: bounded(record.packageName, "packageName", 160, packageName),
     className: bounded(record.className, "className", 64, className),
   };
+  if (identity.packageName.split(".").some(segment => javaReservedWords.has(segment))) {
+    throw new Error("packageName contains a Java reserved word");
+  }
   if (behavior === "STATEFUL_BOOLEAN_DEVICE_V1") {
     const expected = ["behavior", "className", "packageName", "projectName", "serviceId"].sort();
     if (keys.join("\n") !== expected.join("\n")) throw new Error("stateful service request contains unknown or missing fields");
@@ -68,10 +76,12 @@ export function validateLocalServiceRequest(value: unknown): LocalServiceRequest
   if (keys.join("\n") !== expected.join("\n")) throw new Error("constant service request contains unknown or missing fields");
   const type = bounded(record.valueType, "valueType", 16);
   if (!valueTypes.has(type)) throw new Error("valueType is unsupported");
+  const operation = bounded(record.operation, "operation", 64, identifier);
+  if (javaReservedWords.has(operation)) throw new Error("operation is a Java reserved word");
   return {
     ...identity,
     behavior,
-    operation: bounded(record.operation, "operation", 64, identifier),
+    operation,
     valueType: type as ConstantServiceRequest["valueType"],
     value: bounded(record.value, "value", 4096),
   };

@@ -31,3 +31,7 @@ Numeric boundary review: preserve parsed numeric values in Java source. Canonica
 INT/LONG/DOUBLE after validation to prevent octal interpretation and float suffix
 rounding; lock signs, leading zero, negative zero, bounds and overflow with unit tests
 and compile/start/invoke a real generated INT service returning decimal 12 for "012".
+
+Identifier boundary review: reject reserved Java words in method names and every
+package segment before generation, in both renderer request validation and Java model
+validation. Preserve valid contextual names such as the method name "record".

@@ -1,6 +1,7 @@
 package io.github.davidlee.smarthome.generator;
 
 import java.util.ArrayList;
+import javax.lang.model.SourceVersion;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +45,9 @@ public final class ServiceDefinition {
         }
         if (packageName == null || packageName.length() > 160 || !PACKAGE_NAME.matcher(packageName).matches()) {
             throw new IllegalArgumentException("packageName has an invalid format");
+        }
+        for (String segment : packageName.split("\\.")) {
+            if (SourceVersion.isKeyword(segment) || "_".equals(segment)) throw new IllegalArgumentException("packageName contains a Java reserved word");
         }
         if (className == null || !CLASS_NAME.matcher(className).matches()) {
             throw new IllegalArgumentException("className has an invalid format");

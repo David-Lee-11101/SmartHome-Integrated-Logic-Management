@@ -4,6 +4,17 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class OperationSpecTest {
+    @Test public void reservedWordsFailBeforeGeneration() {
+        for (String name : new String[]{"class", "return", "true", "null", "_"}) {
+            assertThrows(IllegalArgumentException.class, () -> new OperationSpec(name, OperationSpec.ValueType.INT, "1"));
+        }
+        for (String packageName : new String[]{"io.class.demo", "return.demo", "io.null.demo"}) {
+            assertThrows(IllegalArgumentException.class, () -> new ServiceDefinition("sensor.test", packageName, "Sensor",
+                java.util.Collections.singletonList(new OperationSpec("read", OperationSpec.ValueType.INT, "1"))));
+        }
+        assertEquals("record", new OperationSpec("record", OperationSpec.ValueType.INT, "1").getName());
+    }
+
     @Test public void decimalIntegersAreCanonicalAndPreserveParsedValues() {
         String[][] values = {{"012", "12"}, {"08", "8"}, {"-012", "-12"}, {"+0008", "8"},
             {"-0", "0"}, {"000", "0"}, {"2147483647", "2147483647"}, {"-2147483648", "-2147483648"}};
