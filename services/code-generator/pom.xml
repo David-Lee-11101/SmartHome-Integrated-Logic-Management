@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>io.github.davidlee.smarthome</groupId>
+  <artifactId>management-code-generator</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <name>SmartHome Integrated Logic Management Code Generator</name>
+  <description>Confined source generator for local Smart Home research services.</description>
+  <licenses>
+    <license>
+      <name>UNLICENSED</name>
+      <distribution>manual</distribution>
+      <comments>No reuse license is granted for owner-authored material; see ../../RIGHTS.md.</comments>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>David Lee</name>
+      <email>109534658+David-Lee-11101@users.noreply.github.com</email>
+    </developer>
+  </developers>
+  <properties>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

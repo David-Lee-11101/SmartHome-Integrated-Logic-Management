@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceRepository": "David-Lee-11101/SmartService-Automate-Generator",
+  "sourceCommit": "0104cb8347b49f0b3b289f71c686bbdde602421b",
+  "migration": "clean-room boundary repair preserving generator intent without copying unsafe host paths or arbitrary Java bodies",
+  "sourceInventory": [
+    {"path":"pom.xml","gitBlob":"8596269a0b645375a8f1f24034351314293e15f2","sha256":"91f2577888a9c90a42c45b12749a983d2e93733a2e013d75e3142b3021a28e07"},
+    {"path":"src/main/java/com/applet/mpinterface/framework/ConsumerProjectGenerator.java","gitBlob":"f7034d0ba929c611be8ea9d4abaf0d2d8a96d071","sha256":"cfd6e3addee1045e8b08dc1ff8cb8a9e6acc333f11106e98f3f05e2d68f09d3f"},
+    {"path":"src/main/java/com/applet/mpinterface/framework/GenerationResult.java","gitBlob":"f0b97121d8c111452f3170e15dce20f028c400eb","sha256":"1cf9cdcc2063f761704f42c3a5f14bb79d325177348c1ae8d65d8d857bfefc78"},
+    {"path":"src/main/java/com/applet/mpinterface/framework/GeneratorCli.java","gitBlob":"eead648ad1c87a186785f5b56ad9fface6d64bae","sha256":"0e494a671f2bef12fab8d879264f5ff2437b76c39fbdcd74523735ced38b49eb"},
+    {"path":"src/main/java/com/applet/mpinterface/service/impl/SpecificGeneratorImpl.java","gitBlob":"e548e4dafff02fc0c8c06cb34e586a0fec9ad54d","sha256":"77dc78027f967722fc0d00b2ad0f008349d18e0531576c88a66abd1a582b9659"},
+    {"path":"src/main/resources/templates/registry_impl_template.ftl","gitBlob":"51326c312ce2ad0ae167203116b305cda7f0d95a","sha256":"5ab9e738e1f5fae0aced2b67a1e95c55227d6627b5b5d2b09f76aa85ff74894f"},
+    {"path":"src/main/resources/templates/registry_service_template.ftl","gitBlob":"1ab3f15fe4b0b86fad10e081fc75a4ded19af418","sha256":"caeab0a984d16b552842d25bbcffe028c4c50efd861b0b09dd943bcd494a4bb6"}
+  ],
+  "rights": "Historical files retain their original repository provenance. This migration grants no reuse license."
+}

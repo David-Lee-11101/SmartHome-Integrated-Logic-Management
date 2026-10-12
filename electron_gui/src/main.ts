@@ -1,5 +1,6 @@
-import {app, BrowserWindow, ipcMain, IpcMainEvent, IpcMainInvokeEvent} from "electron";
+import {app, BrowserWindow, ipcMain, IpcMainEvent, IpcMainInvokeEvent, session} from "electron";
 import {spawn} from "child_process";
+import fs = require("fs");
 import path = require("path");
 import {pathToFileURL} from "url";
 import {
@@ -12,6 +13,8 @@ import {
   requireCatalogModuleId,
   requireModuleEntry,
 } from "./json_loader";
+import {generateBuildStartInvoke} from "./generator_bridge";
+import {readEvidenceSnapshot} from "./evidence_store";
 
 interface DeviceInfo {
   label: string;
@@ -40,14 +43,29 @@ interface PythonArgs {
 type SelectionKind = "trigger" | "query" | "action";
 type IpcEvent = IpcMainEvent | IpcMainInvokeEvent;
 
-const repositoryRoot = path.resolve(__dirname, "../..");
-const electronDataRoot = path.join(repositoryRoot, "data", "electron_json");
+const applicationRoot = app.getAppPath();
+const repositoryRoot = path.resolve(applicationRoot, "..");
+const commandLine = process.argv.slice(1);
+
+function argumentValue(name: string): string | undefined {
+  const index = commandLine.indexOf(name);
+  return index >= 0 ? commandLine[index + 1] : undefined;
+}
+
+const selfCheck = commandLine.includes("--self-check");
+const offline = commandLine.includes("--offline");
+const externalAdaptersEnabled = process.env.SMART_HOME_EXTERNAL_ADAPTERS_ENABLED === "true";
+const workspaceArgument = argumentValue("--workspace");
+const workspaceRoot = workspaceArgument
+  ? path.resolve(workspaceArgument)
+  : path.join(app.getPath("userData"), "workspace");
+const electronDataRoot = path.join(workspaceRoot, "catalog");
 const moduleRoots: Record<SelectionKind, string> = {
   trigger: path.join(electronDataRoot, "trigger"),
   query: path.join(electronDataRoot, "query"),
   action: path.join(electronDataRoot, "action"),
 };
-const indexHtmlPath = path.resolve(__dirname, "../assets/index.html");
+const indexHtmlPath = path.join(applicationRoot, "assets", "index.html");
 const trustedRendererUrl = pathToFileURL(indexHtmlPath).toString();
 
 let win: BrowserWindow | undefined;
@@ -147,6 +165,9 @@ function validatePythonArgs(value: unknown): PythonArgs {
 }
 
 function runPythonScript(args: PythonArgs): void {
+  if (!externalAdaptersEnabled) {
+    throw new Error("external adapters are disabled; enable them explicitly after reviewing configuration");
+  }
   const spiderPath = path.join(repositoryRoot, "applet_executor", "ifttt_rule_creator.py");
   const commandArgs = [
     "runspider",
@@ -200,10 +221,10 @@ function trustedOn(channel: string, listener: (event: IpcMainEvent, ...args: unk
   });
 }
 
-function trustedHandle(channel: string, listener: (event: IpcMainInvokeEvent) => Promise<string>): void {
-  ipcMain.handle(channel, async (event) => {
+function trustedHandle(channel: string, listener: (event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<unknown>): void {
+  ipcMain.handle(channel, async (event, ...args) => {
     assertTrustedEvent(event);
-    return listener(event);
+    return listener(event, ...args);
   });
 }
 
@@ -227,12 +248,70 @@ function moduleSelection(
 }
 
 function loadCatalogs(): void {
+  if (!fs.existsSync(electronDataRoot)) {
+    triggerDevices = [];
+    queryDevices = [];
+    actionDevices = [];
+    return;
+  }
   triggerDevices = readCatalog(electronDataRoot, "trigger_device_names.json");
   queryDevices = readCatalog(electronDataRoot, "query_device_names.json");
   actionDevices = readCatalog(electronDataRoot, "action_device_names.json");
 }
 
+let preloadReady = false;
+let rendererSandboxed = false;
+let rendererContextIsolated = false;
+let windowLoaded = false;
+
+function writeSelfCheckReport(): void {
+  if (!selfCheck || !preloadReady || !windowLoaded) return;
+  if (!offline) throw new Error("self-check requires --offline");
+  const reportPath = argumentValue("--report");
+  if (!reportPath) throw new Error("self-check requires --report");
+  fs.mkdirSync(workspaceRoot, {recursive: true});
+  const workspaceEntries = fs.readdirSync(workspaceRoot);
+  const buildInfoPath = path.join(applicationRoot, "build-info.json");
+  const buildInfo = fs.existsSync(buildInfoPath)
+    ? JSON.parse(fs.readFileSync(buildInfoPath, "utf8")) as Record<string, unknown>
+    : {head: process.env.MANAGEMENT_EXACT_HEAD ?? "development"};
+  const normalizedAppPath = applicationRoot.split(path.sep).join("/");
+  const normalizedResources = process.resourcesPath.split(path.sep).join("/");
+  const packagedStructure = normalizedAppPath.endsWith("/resources/app") || normalizedAppPath.endsWith("/Resources/app");
+  const report = {
+    schemaVersion: "1.0.0",
+    status: "ready",
+    didFinishLoad: true,
+    preloadIpcReady: true,
+    rendererSandboxed,
+    contextIsolation: rendererContextIsolated,
+    offline: true,
+    externalAdaptersEnabled,
+    workspaceState: workspaceEntries.length === 0 ? "empty" : "non-empty",
+    packaged: packagedStructure,
+    electronPackagedFlag: app.isPackaged,
+    packagedAppPathVerified: packagedStructure,
+    resourcesPathVerified: normalizedAppPath.startsWith(normalizedResources),
+    head: String(buildInfo.head),
+    electron: process.versions.electron,
+    platform: process.platform,
+    arch: process.arch,
+  };
+  fs.writeFileSync(path.resolve(reportPath), JSON.stringify(report, null, 2) + "\n", {encoding: "utf8", flag: "wx"});
+  setImmediate(() => app.quit());
+}
+
+ipcMain.on("management:preload-ready", (event, sandboxed: unknown, contextIsolated: unknown) => {
+  if (!win || event.sender !== win.webContents) return;
+  if (sandboxed !== true || contextIsolated !== true) throw new Error("renderer sandbox was not enabled");
+  rendererSandboxed = true;
+  rendererContextIsolated = true;
+  preloadReady = true;
+  writeSelfCheckReport();
+});
+
 function createWindow(): void {
+  fs.mkdirSync(workspaceRoot, {recursive: true});
   loadCatalogs();
   win = new BrowserWindow({
     width: 800,
@@ -250,10 +329,20 @@ function createWindow(): void {
       event.preventDefault();
     }
   });
+  win.webContents.on("did-finish-load", () => {
+    windowLoaded = true;
+    writeSelfCheckReport();
+  });
   void win.loadFile(indexHtmlPath);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  if (offline) {
+    session.defaultSession.webRequest.onBeforeRequest({urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*"]},
+      (_details, callback) => callback({cancel: true}));
+  }
+  createWindow();
+});
 
 trustedOn("load_filter_code_option", (_event, value) => {
   const record = requireRecord(value, "filter option request");
@@ -316,3 +405,10 @@ trustedHandle("getEditorContent", async (event) => {
   const result = await event.sender.executeJavaScript("window.getEditorContent()", true);
   return String(result);
 });
+
+trustedHandle("management:generate-service", async (_event, request) => {
+  if (selfCheck) throw new Error("generation is disabled during self-check");
+  return generateBuildStartInvoke(applicationRoot, workspaceRoot, request);
+});
+
+trustedHandle("management:evidence-snapshot", async () => readEvidenceSnapshot(workspaceRoot));

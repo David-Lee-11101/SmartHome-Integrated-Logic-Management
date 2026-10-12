@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 import sqlite3
 import tempfile
 import unittest
@@ -56,7 +57,7 @@ class OfflineComposerTest(unittest.TestCase):
     def test_schema_mismatch_fails_without_destroying_existing_table(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "legacy.db"
-            with sqlite3.connect(str(database)) as connection:
+            with closing(sqlite3.connect(str(database))) as connection:
                 connection.execute(
                     """CREATE TABLE rule_table(
                         trigger_device TEXT, trigger_condition TEXT, query_device TEXT,
@@ -66,11 +67,12 @@ class OfflineComposerTest(unittest.TestCase):
                 )
                 original_row = ("sensor", "on", "room", "occupied", "lamp", "turn-on", 0, 5)
                 connection.execute("INSERT INTO rule_table VALUES (?, ?, ?, ?, ?, ?, ?, ?)", original_row)
+                connection.commit()
 
             with self.assertRaisesRegex(RuntimeError, "migration"):
                 SqliteInterface(database)
 
-            with sqlite3.connect(str(database)) as connection:
+            with closing(sqlite3.connect(str(database))) as connection:
                 columns = connection.execute("PRAGMA table_info(rule_table)").fetchall()
                 rows = connection.execute("SELECT * FROM rule_table").fetchall()
             self.assertIn("action_execution", [column[1] for column in columns])
