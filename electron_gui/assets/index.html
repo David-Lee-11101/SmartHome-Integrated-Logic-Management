@@ -5,11 +5,45 @@
           content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
     <link rel="stylesheet" href="styles.css"/>
     <meta charset="UTF-8"/>
-    <title>SmartRule Automate Composer</title>
+    <title>SmartHome Integrated Logic Management</title>
 </head>
 
 <body>
-<h1>SmartRule Automate Composer</h1>
+<h1>SmartHome Integrated Logic Management</h1>
+<p class="product-lede">Define local logic, generate typed services, and inspect the evidence chain before an action executes.</p>
+
+<section class="local-service-panel" aria-labelledby="local-service-title">
+    <h2 id="local-service-title">Local service pipeline</h2>
+    <p>Generate, compile, start, register, and invoke a typed TinyRPC provider in the local workspace.</p>
+    <div class="service-fields">
+        <label>Project <input id="service_project" value="temperature-sensor"></label>
+        <label>Service ID <input id="service_id" value="sensor.temperature"></label>
+        <label>Package <input id="service_package" value="io.smarthome.generated.sensor"></label>
+        <label>Class <input id="service_class" value="TemperatureSensor"></label>
+        <label>Operation <input id="service_operation" value="readCelsius"></label>
+        <label>Type <select id="service_type"><option>DOUBLE</option><option>BOOLEAN</option><option>INT</option><option>LONG</option><option>STRING</option></select></label>
+        <label>Value <input id="service_value" value="21.5"></label>
+    </div>
+    <button id="generate_service_button">Run local pipeline</button>
+    <pre id="pipeline_result" aria-live="polite">No local pipeline run yet.</pre>
+</section>
+
+<section class="evidence-panel" aria-labelledby="evidence-title">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">Decision evidence</p>
+            <h2 id="evidence-title">Local execution record</h2>
+        </div>
+        <button id="refresh_evidence_button" class="secondary-button">Refresh evidence</button>
+    </div>
+    <p class="panel-copy">This view reads four fixed JSON files from the local workspace. Empty cards mean no component has produced that evidence yet.</p>
+    <div class="evidence-grid">
+        <article class="evidence-card"><h3>Logic definition</h3><pre id="logic_definition_record">No local record.</pre></article>
+        <article class="evidence-card"><h3>Profile evidence</h3><pre id="profile_evidence_record">No local record.</pre></article>
+        <article class="evidence-card"><h3>Scheduling decision</h3><pre id="scheduling_decision_record">No local record.</pre></article>
+        <article class="evidence-card evidence-card-wide"><h3>Execution event timeline</h3><pre id="execution_events_record">No local record.</pre></article>
+    </div>
+</section>
 
 <div class="input-container" id="rule_name">
     <label id="rule_name_label" for="rule_name_input">Rule Name:</label>
@@ -116,7 +150,7 @@
 
 <div class="editor-grid">
     <div class="input-group">
-        <label class="editor-label" for="editor">Filter Code</label>
+        <label class="editor-label" for="editor">Local Logic Editor</label>
         <textarea id="editor" spellcheck="false">// Write your filter code here;</textarea>
     </div>
     <div class="input-group">

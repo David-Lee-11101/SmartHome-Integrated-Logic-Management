@@ -1,19 +1,26 @@
 {
-  "name": "smartrule-automate-composer",
+  "name": "smarthome-integrated-logic-management",
   "version": "1.0.0",
-  "description": "Experimental Electron interface for composing IoT automation rules.",
+  "description": "Offline-first management workspace for smart-home service logic, profiling evidence, and execution decisions.",
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc",
     "test": "npm run build && npm run test:security",
     "test:security": "node --test test/*.test.js",
-    "start": "npm run build && electron ./dist/main.js"
+    "start": "npm run build && electron .",
+    "package:unpacked": "npm run build && node tools/package-unpacked.mjs",
+    "verify:package": "node tools/verify-package-report.mjs",
+    "verify:pipeline": "npm run build && node tools/verify-local-pipeline.mjs"
   },
-  "author": "weihaodong",
-  "license": "ISC",
+  "author": {
+    "name": "David Lee",
+    "email": "109534658+David-Lee-11101@users.noreply.github.com"
+  },
+  "private": true,
+  "license": "UNLICENSED",
   "devDependencies": {
     "@types/node": "^20.5.0",
-    "electron": "41.10.6",
+    "electron": "44.7.0",
     "typescript": "^5.2.2"
   }
 }

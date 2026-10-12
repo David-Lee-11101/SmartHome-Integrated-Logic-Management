@@ -1,4 +1,11 @@
-import {ipcRenderer} from "electron";
+import {contextBridge, ipcRenderer} from "electron";
+
+contextBridge.exposeInMainWorld("management", {
+    status: "ready",
+    generateService: (request: unknown) => ipcRenderer.invoke("management:generate-service", request),
+    readEvidenceSnapshot: () => ipcRenderer.invoke("management:evidence-snapshot"),
+});
+ipcRenderer.send("management:preload-ready");
 
 //规定了逻辑处理函数与页面元素变化时接收通知并处理
 
@@ -9,6 +16,14 @@ function refreshSelect(elem: HTMLSelectElement, selectDict: object) {
         let option = document.createElement("option");
         option.value = item["module_name"];
         option.text = item["name"];
+        elem.add(option);
+    }
+    if (elem.options.length === 0) {
+        let option = document.createElement("option");
+        option.value = "";
+        option.text = "No local catalog entries";
+        option.disabled = true;
+        option.selected = true;
         elem.add(option);
     }
 }
@@ -172,7 +187,7 @@ window.onload = () => {
             "trigger_device"
         ) as HTMLSelectElement;
         refreshSelect(trigger_device_elem, arg);
-        ipcRenderer.send("trigger_device_change", trigger_device_elem.options[0].text);
+        if (Object.keys(arg).length > 0) ipcRenderer.send("trigger_device_change", trigger_device_elem.options[0].text);
     });
 
     ipcRenderer.on("load_query_devices", (event, arg) => {
@@ -180,7 +195,7 @@ window.onload = () => {
             "query_device"
         ) as HTMLSelectElement;
         refreshSelect(query_device_elem, arg);
-        ipcRenderer.send("query_device_change", query_device_elem.options[0].text);
+        if (Object.keys(arg).length > 0) ipcRenderer.send("query_device_change", query_device_elem.options[0].text);
     });
 
     ipcRenderer.on("load_action_devices", (event, arg) => {
@@ -188,7 +203,7 @@ window.onload = () => {
             "action_device"
         ) as HTMLSelectElement;
         refreshSelect(action_device_elem, arg);
-        ipcRenderer.send("action_device_change", action_device_elem.options[0].text);
+        if (Object.keys(arg).length > 0) ipcRenderer.send("action_device_change", action_device_elem.options[0].text);
     });
 
 

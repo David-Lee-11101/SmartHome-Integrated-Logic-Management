@@ -1,4 +1,4 @@
-name: ci
+name: exact-head-verification
 
 on:
   push:
@@ -7,27 +7,153 @@ on:
 permissions:
   contents: read
 
-jobs:
-  python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: python -m unittest discover -s tests
+env:
+  COMMUNICATION_COMMIT: b338e925b7a4364d1fbebe2fa04ea8f99e3ef3c0
+  LOGIC_ENGINE_COMMIT: a3db562cf7be032f8dffecb9f031be44c5d34a93
 
-  electron:
-    runs-on: ubuntu-latest
+jobs:
+  cross-platform:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS 15 ARM64
+            os: macos-15
+            arch: arm64
+          - label: Ubuntu 24.04 X64
+            os: ubuntu-24.04
+            arch: x64
+          - label: Windows 2022 X64
+            os: windows-2022
+            arch: x64
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: electron_gui
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out the candidate exact head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Assert candidate and host identity
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          node -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error(`expected ${process.env.EXPECTED_ARCH}, got ${process.arch}`)'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: electron_gui/package-lock.json
-      - run: npm ci
-      - run: npm test
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Set up Java 8
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Check out Communication at its pinned commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          repository: David-Lee-11101/Handwritten-Netty-RPC
+          ref: ${{ env.COMMUNICATION_COMMIT }}
+          path: _components/communication
+          fetch-depth: 1
+
+      - name: Check out Logic Engine at its pinned commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          repository: David-Lee-11101/SmartService-Discovery-RPC
+          ref: ${{ env.LOGIC_ENGINE_COMMIT }}
+          path: _components/logic-engine
+          fetch-depth: 1
+
+      - name: Assert component heads
+        run: |
+          test "$(git -C _components/communication rev-parse HEAD)" = "$COMMUNICATION_COMMIT"
+          test "$(git -C _components/logic-engine rev-parse HEAD)" = "$LOGIC_ENGINE_COMMIT"
+
+      - name: Run offline composer regressions
+        run: python -m unittest discover -s tests -v
+
+      - name: Install Communication from source
+        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" install
+        working-directory: _components/communication
+
+      - name: Install Logic Engine and TinyRPC adapter from source
+        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" -DtinyRpcAdapter install
+        working-directory: _components/logic-engine
+
+      - name: Build and test the confined generator
+        run: mvn -s "$GITHUB_WORKSPACE/.github/maven-central-settings.xml" -Dmaven.repo.local="$RUNNER_TEMP/management-m2" clean package
+        working-directory: services/code-generator
+
+      - name: Install Electron dependencies from the lock
+        run: npm ci
+        working-directory: electron_gui
+
+      - name: Test and audit the desktop application
+        run: |
+          npm test
+          npm audit --audit-level=high
+        working-directory: electron_gui
+
+      - name: Enable the normal Chromium setuid sandbox on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root electron_gui/node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 electron_gui/node_modules/electron/dist/chrome-sandbox
+          test "$(stat -c '%a' electron_gui/node_modules/electron/dist/chrome-sandbox)" = "4755"
+
+      - name: Verify generated provider, local catalog, Logic Engine, and TinyRPC invocation
+        env:
+          MANAGEMENT_JAVA: java
+          MANAGEMENT_MAVEN: mvn
+          MANAGEMENT_MAVEN_SETTINGS: ${{ github.workspace }}/.github/maven-central-settings.xml
+          MANAGEMENT_MAVEN_REPOSITORY: ${{ runner.temp }}/management-m2
+        run: npm run verify:pipeline -- --output "$RUNNER_TEMP/local-pipeline-proof.json"
+        working-directory: electron_gui
+
+      - name: Start the native BrowserWindow, preload, and IPC
+        run: |
+          node tools/run-native-smoke.mjs --report-output "$RUNNER_TEMP/native-self-check.json"
+          node tools/verify-package-report.mjs --mode native --report "$RUNNER_TEMP/native-self-check.json"
+        working-directory: electron_gui
+
+      - name: Build the complete host runtime and start its production resources/app
+        run: |
+          node tools/package-unpacked.mjs --output "$RUNNER_TEMP/management-package"
+          node tools/run-package-smoke.mjs --package "$RUNNER_TEMP/management-package" --report-output "$RUNNER_TEMP/packaged-self-check.json"
+          node tools/verify-package-report.mjs --mode packaged --report "$RUNNER_TEMP/packaged-self-check.json"
+        working-directory: electron_gui
+
+      - name: Collect bounded verification evidence
+        run: |
+          mkdir -p verification-evidence
+          cp "$RUNNER_TEMP/local-pipeline-proof.json" verification-evidence/
+          cp "$RUNNER_TEMP/native-self-check.json" verification-evidence/
+          cp "$RUNNER_TEMP/packaged-self-check.json" verification-evidence/
+          cp "$RUNNER_TEMP/management-package/package-manifest.json" verification-evidence/
+          printf '%s\n' "$COMMUNICATION_COMMIT" > verification-evidence/communication-commit.txt
+          printf '%s\n' "$LOGIC_ENGINE_COMMIT" > verification-evidence/logic-engine-commit.txt
+          git rev-parse HEAD > verification-evidence/management-commit.txt
+
+      - name: Upload evidence only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: management-verification-${{ runner.os }}-${{ matrix.arch }}
+          path: verification-evidence
+          if-no-files-found: error
+          retention-days: 14
