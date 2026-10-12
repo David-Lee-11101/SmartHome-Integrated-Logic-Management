@@ -8,20 +8,33 @@ document.getElementById("generate_service_button")?.addEventListener("click", as
     result.textContent = "Running the local generation pipeline...";
     const value = function (id) { return document.getElementById(id).value; };
     try {
-        const proof = await window.management.generateService({
+        const identity = {
             projectName: value("service_project"),
             serviceId: value("service_id"),
             packageName: value("service_package"),
             className: value("service_class"),
-            operation: value("service_operation"),
-            valueType: value("service_type"),
-            value: value("service_value"),
-        });
+        };
+        const behavior = value("service_behavior");
+        const request = behavior === "STATEFUL_BOOLEAN_DEVICE_V1"
+            ? {...identity, behavior}
+            : {...identity, behavior, operation: value("service_operation"), valueType: value("service_type"), value: value("service_value")};
+        const proof = await window.management.generateService(request);
         result.textContent = JSON.stringify(proof, null, 2);
     } catch (error) {
         result.textContent = `Pipeline failed: ${String(error.message ?? error)}`;
     }
 });
+
+function refreshServiceBehavior() {
+    const stateful = document.getElementById("service_behavior").value === "STATEFUL_BOOLEAN_DEVICE_V1";
+    for (const field of document.querySelectorAll(".constant-service-field")) {
+        field.hidden = stateful;
+        for (const input of field.querySelectorAll("input, select")) input.disabled = stateful;
+    }
+}
+
+document.getElementById("service_behavior")?.addEventListener("change", refreshServiceBehavior);
+refreshServiceBehavior();
 
 const evidenceTargets = {
     logicDefinition: "logic_definition_record",

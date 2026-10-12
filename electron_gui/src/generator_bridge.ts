@@ -2,20 +2,31 @@ import {ChildProcessWithoutNullStreams, spawn} from "child_process";
 import fs = require("fs");
 import path = require("path");
 
-export interface LocalServiceRequest {
+interface LocalServiceIdentity {
   projectName: string;
   serviceId: string;
   packageName: string;
   className: string;
+}
+
+export interface ConstantServiceRequest extends LocalServiceIdentity {
+  behavior: "CONSTANT_V1";
   operation: string;
   valueType: "BOOLEAN" | "INT" | "LONG" | "DOUBLE" | "STRING";
   value: string;
 }
 
+export interface StatefulBooleanDeviceRequest extends LocalServiceIdentity {
+  behavior: "STATEFUL_BOOLEAN_DEVICE_V1";
+}
+
+export type LocalServiceRequest = ConstantServiceRequest | StatefulBooleanDeviceRequest;
+
 export interface LocalPipelineResult {
   generationManifest: Record<string, unknown>;
   provider: Record<string, unknown>;
   invocation: Record<string, unknown>;
+  statefulProof?: Record<string, unknown>;
   catalogId: "local.catalog";
 }
 
@@ -37,17 +48,31 @@ export function validateLocalServiceRequest(value: unknown): LocalServiceRequest
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("service request must be an object");
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
-  const expected = ["className", "operation", "packageName", "projectName", "serviceId", "value", "valueType"];
-  if (keys.join("\n") !== expected.join("\n")) throw new Error("service request contains unknown or missing fields");
-  const type = bounded(record.valueType, "valueType", 16);
-  if (!valueTypes.has(type)) throw new Error("valueType is unsupported");
-  return {
+  const legacy = ["className", "operation", "packageName", "projectName", "serviceId", "value", "valueType"].sort();
+  const behavior = record.behavior === undefined && keys.join("\n") === legacy.join("\n")
+    ? "CONSTANT_V1"
+    : bounded(record.behavior, "behavior", 40);
+  const identity = {
     projectName: bounded(record.projectName, "projectName", 63, projectName),
     serviceId: bounded(record.serviceId, "serviceId", 128, serviceId),
     packageName: bounded(record.packageName, "packageName", 160, packageName),
     className: bounded(record.className, "className", 64, className),
+  };
+  if (behavior === "STATEFUL_BOOLEAN_DEVICE_V1") {
+    const expected = ["behavior", "className", "packageName", "projectName", "serviceId"].sort();
+    if (keys.join("\n") !== expected.join("\n")) throw new Error("stateful service request contains unknown or missing fields");
+    return {...identity, behavior};
+  }
+  if (behavior !== "CONSTANT_V1") throw new Error("behavior is unsupported");
+  const expected = record.behavior === undefined ? legacy : [...legacy, "behavior"].sort();
+  if (keys.join("\n") !== expected.join("\n")) throw new Error("constant service request contains unknown or missing fields");
+  const type = bounded(record.valueType, "valueType", 16);
+  if (!valueTypes.has(type)) throw new Error("valueType is unsupported");
+  return {
+    ...identity,
+    behavior,
     operation: bounded(record.operation, "operation", 64, identifier),
-    valueType: type as LocalServiceRequest["valueType"],
+    valueType: type as ConstantServiceRequest["valueType"],
     value: bounded(record.value, "value", 4096),
   };
 }
@@ -101,6 +126,17 @@ function parseSingleJsonLine(output: string, event: string): Record<string, unkn
   return parsed;
 }
 
+function typedScalar(result: Record<string, unknown>, expectedType: "boolean" | "integer"): unknown {
+  if (result.status !== "success" || typeof result.value !== "object" || result.value === null || Array.isArray(result.value)) {
+    throw new Error("invocation did not return a typed scalar");
+  }
+  const value = result.value as Record<string, unknown>;
+  if (Object.keys(value).sort().join("\n") !== ["type", "value"].sort().join("\n") || value.type !== expectedType) {
+    throw new Error(`invocation did not return ${expectedType}`);
+  }
+  return value.value;
+}
+
 function waitForProvider(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let stdout = "";
@@ -152,7 +188,10 @@ function writeCatalog(workspaceRoot: string, provider: Record<string, unknown>, 
   fs.mkdirSync(catalogRoot, {recursive: true});
   const catalogPath = path.join(catalogRoot, "local-catalog.json");
   const temporary = path.join(catalogRoot, `.local-catalog-${process.pid}-${Date.now()}.tmp`);
-  const catalog = {schemaVersion: "1.0.0", catalogId: "local.catalog", services: [{serviceId: request.serviceId, operation: request.operation, host: provider.host, port: provider.port, transport: "tiny-rpc-json-line"}]};
+  const operations = request.behavior === "STATEFUL_BOOLEAN_DEVICE_V1"
+    ? ["setEnabled", "readEnabled", "readActionCount"]
+    : [request.operation];
+  const catalog = {schemaVersion: "1.0.2", catalogId: "local.catalog", services: operations.map(operation => ({serviceId: request.serviceId, operation, host: provider.host, port: provider.port, transport: "tiny-rpc-json-line"}))};
   fs.writeFileSync(temporary, JSON.stringify(catalog, null, 2) + "\n", {flag: "wx"});
   fs.renameSync(temporary, catalogPath);
 }
@@ -170,7 +209,10 @@ export async function generateBuildStartInvoke(applicationRoot: string, workspac
   if (!fs.existsSync(generatorJar) || !fs.statSync(generatorJar).isFile()) throw new Error("packaged code generator is missing");
   const outputRoot = path.join(workspaceRoot, "generated-services");
   fs.mkdirSync(outputRoot, {recursive: true});
-  const generationOutput = await runBounded(java, ["-cp", generatorJar, "io.github.davidlee.smarthome.generator.GeneratorCli", outputRoot, request.projectName, request.serviceId, request.packageName, request.className, request.operation, request.valueType, request.value], workspaceRoot, 15000);
+  const generatorArguments = request.behavior === "STATEFUL_BOOLEAN_DEVICE_V1"
+    ? [request.behavior, outputRoot, request.projectName, request.serviceId, request.packageName, request.className]
+    : [request.behavior, outputRoot, request.projectName, request.serviceId, request.packageName, request.className, request.operation, request.valueType, request.value];
+  const generationOutput = await runBounded(java, ["-cp", generatorJar, "io.github.davidlee.smarthome.generator.GeneratorCli", ...generatorArguments], workspaceRoot, 15000);
   const generationManifest = JSON.parse(generationOutput) as Record<string, unknown>;
   const projectRoot = path.join(outputRoot, request.projectName);
   const mavenArgs = ["-s", path.resolve(settings), `-Dmaven.repo.local=${path.resolve(localRepository)}`, "package"];
@@ -182,8 +224,39 @@ export async function generateBuildStartInvoke(applicationRoot: string, workspac
     const provider = await waitForProvider(providerProcess, 15000);
     if (provider.host !== "127.0.0.1" || !Number.isInteger(provider.port) || Number(provider.port) <= 0) throw new Error("provider announced an invalid endpoint");
     writeCatalog(workspaceRoot, provider, request);
-    const invocationOutput = await runBounded(java, ["-cp", classpath, "io.smarthome.logic.tinyrpc.TinyRpcLogicCli", "invoke", "127.0.0.1", String(provider.port), request.serviceId, request.operation, "[]"], projectRoot, 15000);
-    const invocation = parseSingleJsonLine(invocationOutput, "invocation-result");
+    const invoke = async (operation: string, argumentsJson = "[]") => parseSingleJsonLine(
+      await runBounded(java, ["-cp", classpath, "io.smarthome.logic.tinyrpc.TinyRpcLogicCli", "invoke", "127.0.0.1", String(provider.port), request.serviceId, operation, argumentsJson], projectRoot, 15000),
+      "invocation-result");
+    if (request.behavior === "STATEFUL_BOOLEAN_DEVICE_V1") {
+      const initialEnabled = await invoke("readEnabled");
+      const initialCount = await invoke("readActionCount");
+      const firstMutation = await invoke("setEnabled");
+      const enabledAfterMutation = await invoke("readEnabled");
+      const countAfterMutation = await invoke("readActionCount");
+      const secondMutation = await invoke("setEnabled");
+      const concurrentMutations = await Promise.all(Array.from({length: 8}, () => invoke("setEnabled")));
+      const countAfterConcurrentMutations = await invoke("readActionCount");
+      const invalidArguments = await invoke("setEnabled", '[{"type":"boolean","value":true}]');
+      const unknownOperation = await invoke("unknownOperation");
+      const finalCount = await invoke("readActionCount");
+      const successful = [initialEnabled, initialCount, firstMutation, enabledAfterMutation, countAfterMutation,
+        secondMutation, countAfterConcurrentMutations, finalCount].every(result => result.status === "success")
+        && concurrentMutations.every(result => result.status === "success");
+      if (!successful || invalidArguments.status === "success" || unknownOperation.status === "success") {
+        throw new Error("stateful TinyRPC proof did not satisfy its success and rejection contract");
+      }
+      if (typedScalar(initialEnabled, "boolean") !== false || typedScalar(initialCount, "integer") !== 0
+          || typedScalar(firstMutation, "boolean") !== true || typedScalar(enabledAfterMutation, "boolean") !== true
+          || typedScalar(countAfterMutation, "integer") !== 1 || typedScalar(secondMutation, "boolean") !== true
+          || concurrentMutations.some(result => typedScalar(result, "boolean") !== true)
+          || typedScalar(countAfterConcurrentMutations, "integer") !== 10 || typedScalar(finalCount, "integer") !== 10) {
+        throw new Error("stateful TinyRPC proof returned an unexpected state or action count");
+      }
+      const statefulProof = {initialEnabled, initialCount, firstMutation, enabledAfterMutation, countAfterMutation,
+        secondMutation, concurrentMutations, countAfterConcurrentMutations, invalidArguments, unknownOperation, finalCount};
+      return {generationManifest, provider, invocation: firstMutation, statefulProof, catalogId: "local.catalog"};
+    }
+    const invocation = await invoke(request.operation);
     if (invocation.status !== "success") throw new Error("Logic Engine invocation did not succeed");
     return {generationManifest, provider, invocation, catalogId: "local.catalog"};
   } finally {

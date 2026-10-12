@@ -10,7 +10,10 @@ Java class, alter a classpath, submit Java source, or interpolate a shell comman
 all identifiers and typed literals, and atomically reserves a new project directory.
 Its `GenerationManifest` records template and output hashes without a host path.
 
-The generated project owns one typed provider process. Maven compiles it and copies its
+The generated project owns one typed provider process. A constant template returns one
+validated literal. The fixed `STATEFUL_BOOLEAN_DEVICE_V1` template owns a synchronized
+boolean and successful-action counter in that same process; it exposes only three
+zero-argument operations. Maven compiles it and copies its
 runtime dependency closure. The process binds only to loopback on an operating-system
 assigned port. Management records the announced endpoint in an atomic local catalog,
 then calls the fixed Logic Engine CLI, which invokes the provider through TinyRPC.
@@ -49,6 +52,8 @@ sequenceDiagram
 - A provider that does not emit one valid `provider-ready` line is terminated.
 - Catalog publication occurs only after provider readiness.
 - Invocation failure terminates the provider and is returned as an error.
+- Stateful handlers reject non-empty arguments before mutation; unknown operations are
+  unregistered, and both paths leave the action counter unchanged.
 - External adapters remain off during generation and packaged self-checks.
 
 ## Packaging

@@ -28,20 +28,47 @@ public class GeneratedServiceProjectGeneratorTest {
                 Arrays.asList(new OperationSpec("readCelsius", OperationSpec.ValueType.DOUBLE, "21.5")));
     }
 
+    private ServiceDefinition statefulDevice() {
+        return ServiceDefinition.statefulBooleanDevice(
+                "device.virtual-switch", "io.smarthome.generated.device", "VirtualSwitch");
+    }
+
     @Test public void generatesOnlyManifestedPortableSources() throws Exception {
         Path root = temporaryFolder.newFolder("generated").toPath();
         GenerationManifest manifest = new GeneratedServiceProjectGenerator(root).generate("temperature-sensor", sensor());
         assertEquals("sensor.temperature", manifest.getServiceId());
-        assertEquals(2, manifest.getFiles().size());
+        assertEquals(3, manifest.getFiles().size());
         assertTrue(Files.isRegularFile(root.resolve("temperature-sensor/pom.xml")));
         assertTrue(Files.isRegularFile(root.resolve("temperature-sensor/src/main/java/io/smarthome/generated/sensor/TemperatureSensor.java")));
+        assertTrue(Files.isRegularFile(root.resolve("temperature-sensor/service-descriptor.json")));
         assertFalse(manifest.getFiles().toString().contains(root.toString()));
         String generated = new String(Files.readAllBytes(root.resolve("temperature-sensor/src/main/java/io/smarthome/generated/sensor/TemperatureSensor.java")), java.nio.charset.StandardCharsets.UTF_8);
         String pom = new String(Files.readAllBytes(root.resolve("temperature-sensor/pom.xml")), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(generated.contains("TinyRpcTypedProvider.register"));
         assertTrue(generated.contains("builder.build().bind(\"127.0.0.1\", port)"));
         assertTrue(pom.contains("<groupId>io.smarthome</groupId><artifactId>logic-engine-tiny-rpc-adapter</artifactId>"));
-        assertFalse(pom.contains("com.seu"));
+        assertFalse(pom.contains("<groupId>edu."));
+    }
+
+    @Test public void statefulTemplateHasFixedTypedContractAndSynchronizedProviderState() throws Exception {
+        Path root = temporaryFolder.newFolder("stateful").toPath();
+        new GeneratedServiceProjectGenerator(root).generate("virtual-switch", statefulDevice());
+        Path project = root.resolve("virtual-switch");
+        String generated = new String(Files.readAllBytes(project.resolve("src/main/java/io/smarthome/generated/device/VirtualSwitch.java")), java.nio.charset.StandardCharsets.UTF_8);
+        String descriptor = new String(Files.readAllBytes(project.resolve("service-descriptor.json")), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(generated.contains("public boolean setEnabled()"));
+        assertTrue(generated.contains("public boolean readEnabled()"));
+        assertTrue(generated.contains("public long readActionCount()"));
+        assertTrue(generated.contains("synchronized (stateLock)"));
+        assertTrue(generated.contains("actionCount == Long.MAX_VALUE"));
+        assertTrue(generated.contains("requireNoArguments(values, \"setEnabled\")"));
+        assertTrue(descriptor.contains("\"schemaVersion\": \"1.0.1\""));
+        assertTrue(descriptor.contains("\"name\": \"setEnabled\""));
+        assertTrue(descriptor.contains("\"name\": \"readEnabled\""));
+        assertTrue(descriptor.contains("\"name\": \"readActionCount\""));
+        assertTrue(descriptor.contains("\"returns\": \"boolean\""));
+        assertTrue(descriptor.contains("\"returns\": \"integer\""));
+        assertFalse(descriptor.contains("returnFields"));
     }
 
     @Test public void rejectsTraversalAndInvalidIdentifiers() throws Exception {
@@ -51,6 +78,8 @@ public class GeneratedServiceProjectGeneratorTest {
         assertThrows(IllegalArgumentException.class, () -> new ServiceDefinition("sensor.temperature", "bad-package", "Sensor", Collections.singletonList(new OperationSpec("read", OperationSpec.ValueType.INT, "1"))));
         assertThrows(IllegalArgumentException.class, () -> new OperationSpec("read();", OperationSpec.ValueType.STRING, "value"));
         assertThrows(IllegalArgumentException.class, () -> new OperationSpec("read", OperationSpec.ValueType.DOUBLE, "NaN"));
+        assertThrows(IllegalArgumentException.class, () -> ServiceDefinition.Behavior.parse("JAVA"));
+        assertThrows(IllegalArgumentException.class, () -> ServiceDefinition.Behavior.parse(null));
     }
 
     @Test public void rejectsSymlinkRootAndExistingDestination() throws Exception {

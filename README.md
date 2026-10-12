@@ -21,6 +21,9 @@ historical generator repository remains readable.
 - a local pipeline that generates and compiles a provider, starts it on an assigned
   loopback port, writes an atomic local catalog, and invokes it through the Logic
   Engine and TinyRPC adapter;
+- an allowlisted stateful boolean-device template whose provider owns synchronized
+  state and an action counter, exposed through typed `setEnabled`, `readEnabled`, and
+  `readActionCount` operations;
 - a Node-built-in unpacked packaging path that preserves Electron and Chromium
   notices and starts the copied native runtime from `resources/app`;
 - production `--self-check --offline --report` diagnostics generated only after the
@@ -70,7 +73,7 @@ For the full local provider proof, set `MANAGEMENT_JAVA`, `MANAGEMENT_MAVEN`,
 `MANAGEMENT_MAVEN_SETTINGS`, and `MANAGEMENT_MAVEN_REPOSITORY`, then run:
 
 ```bash
-npm run verify:pipeline -- --output pipeline-proof.json
+npm run verify:pipeline -- --output pipeline-proof.json --descriptor-output service-descriptor.json
 ```
 
 The mandatory release gate runs the same candidate commit on macOS ARM64, Linux X64,
@@ -90,6 +93,9 @@ main process from every raw socket API.
 Generated processes use argument arrays, bounded output, startup deadlines, loopback
 addresses, assigned ports, and deterministic cleanup. Renderer input cannot supply
 shell text, Java source bodies, classpaths, or arbitrary adapter class names.
+The stateful template is fixed: callers cannot add operations or executable logic.
+Wrong-arity and unknown-operation calls fail without increasing the provider-owned
+action counter.
 
 ## Research and evidence limits
 

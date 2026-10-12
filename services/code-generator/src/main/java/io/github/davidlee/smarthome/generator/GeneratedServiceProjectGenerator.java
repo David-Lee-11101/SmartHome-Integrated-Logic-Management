@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 
 public final class GeneratedServiceProjectGenerator {
     private static final Pattern PROJECT_NAME = Pattern.compile("[a-z][a-z0-9-]{0,62}");
-    private static final String TEMPLATE_VERSION = "management-provider-v1";
+    private static final String TEMPLATE_VERSION = "management-provider-v2-stateful-boolean-device";
     private final Path outputRoot;
 
     public GeneratedServiceProjectGenerator(Path outputRoot) throws IOException {
@@ -52,7 +52,8 @@ public final class GeneratedServiceProjectGenerator {
             Map<String, String> hashes = new LinkedHashMap<>();
             for (Map.Entry<String, byte[]> file : rendered.entrySet()) hashes.put(file.getKey(), sha256(file.getValue()));
             String templateHash = sha256(TEMPLATE_VERSION.getBytes(StandardCharsets.UTF_8));
-            String generationId = sha256((definition.getServiceId() + "\n" + templateHash + "\n" + hashes).getBytes(StandardCharsets.UTF_8));
+            String generationId = sha256((definition.getServiceId() + "\n" + definition.getBehavior().name()
+                    + "\n" + templateHash + "\n" + hashes).getBytes(StandardCharsets.UTF_8));
             return new GenerationManifest(generationId, definition.getServiceId(), templateHash, hashes);
         } finally {
             if (staging != null) deleteTree(staging);
@@ -63,6 +64,7 @@ public final class GeneratedServiceProjectGenerator {
         Map<String, byte[]> files = new LinkedHashMap<>();
         String packagePath = definition.getPackageName().replace('.', '/');
         files.put("pom.xml", pom(definition).getBytes(StandardCharsets.UTF_8));
+        files.put("service-descriptor.json", serviceDescriptor(definition).getBytes(StandardCharsets.UTF_8));
         files.put("src/main/java/" + packagePath + "/" + definition.getClassName() + ".java",
                 source(definition).getBytes(StandardCharsets.UTF_8));
         return files;
@@ -83,11 +85,19 @@ public final class GeneratedServiceProjectGenerator {
     }
 
     private String source(ServiceDefinition definition) {
+        if (definition.getBehavior() == ServiceDefinition.Behavior.STATEFUL_BOOLEAN_DEVICE_V1) {
+            return statefulSource(definition);
+        }
+        return constantSource(definition);
+    }
+
+    private String constantSource(ServiceDefinition definition) {
         StringBuilder source = new StringBuilder();
         source.append("package ").append(definition.getPackageName()).append(";\n\n")
                 .append("import io.smarthome.logic.TypedValue;\n")
                 .append("import io.smarthome.logic.tinyrpc.TinyRpcTypedProvider;\n")
                 .append("import io.smarthome.tinyrpc.netty.TinyRpcServer;\n")
+                .append("import java.util.List;\n")
                 .append("import java.util.concurrent.CountDownLatch;\n\n")
                 .append("/** Generated local service implementation. No reuse license is granted. */\n")
                 .append("public final class ").append(definition.getClassName()).append(" {\n")
@@ -103,8 +113,9 @@ public final class GeneratedServiceProjectGenerator {
                 .append("    TinyRpcServer.Builder builder = TinyRpcServer.builder();\n");
         for (OperationSpec operation : definition.getOperations()) {
             source.append("    TinyRpcTypedProvider.register(builder, SERVICE_ID, \"")
-                    .append(javaString(operation.getName())).append("\", values -> ")
-                    .append(typedValueExpression("service." + operation.getName() + "()", operation.getValueType())).append(");\n");
+                    .append(javaString(operation.getName())).append("\", values -> { requireNoArguments(values, \"")
+                    .append(javaString(operation.getName())).append("\"); return ")
+                    .append(typedValueExpression("service." + operation.getName() + "()", operation.getValueType())).append("; });\n");
         }
         source.append("    TinyRpcServer server = builder.build().bind(\"127.0.0.1\", port);\n")
                 .append("    Runtime.getRuntime().addShutdownHook(new Thread(server::close, \"generated-provider-shutdown\"));\n")
@@ -112,8 +123,96 @@ public final class GeneratedServiceProjectGenerator {
                 .append(javaString(definition.getServiceId())).append("\\\"}\");\n")
                 .append("    System.out.flush();\n")
                 .append("    new CountDownLatch(1).await();\n")
+                .append("  }\n")
+                .append("  private static void requireNoArguments(List<TypedValue> values, String operation) {\n")
+                .append("    if (values == null || !values.isEmpty()) throw new IllegalArgumentException(operation + \" does not accept arguments\");\n")
                 .append("  }\n");
         return source.append("}\n").toString();
+    }
+
+    private String statefulSource(ServiceDefinition definition) {
+        return "package " + definition.getPackageName() + ";\n\n"
+                + "import io.smarthome.logic.TypedValue;\n"
+                + "import io.smarthome.logic.tinyrpc.TinyRpcTypedProvider;\n"
+                + "import io.smarthome.tinyrpc.netty.TinyRpcServer;\n"
+                + "import java.util.List;\n"
+                + "import java.util.concurrent.CountDownLatch;\n\n"
+                + "/** Generated stateful local device. No reuse license is granted. */\n"
+                + "public final class " + definition.getClassName() + " {\n"
+                + "  public static final String SERVICE_ID = \"" + javaString(definition.getServiceId()) + "\";\n"
+                + "  private final Object stateLock = new Object();\n"
+                + "  private boolean enabled = false;\n"
+                + "  private long actionCount = 0L;\n"
+                + "  public boolean setEnabled() {\n"
+                + "    synchronized (stateLock) {\n"
+                + "      if (actionCount == Long.MAX_VALUE) throw new IllegalStateException(\"action count limit reached\");\n"
+                + "      enabled = true;\n"
+                + "      actionCount++;\n"
+                + "      return enabled;\n"
+                + "    }\n"
+                + "  }\n"
+                + "  public boolean readEnabled() { synchronized (stateLock) { return enabled; } }\n"
+                + "  public long readActionCount() { synchronized (stateLock) { return actionCount; } }\n"
+                + "  public static void main(String[] args) throws Exception {\n"
+                + "    int port = args.length == 0 ? 0 : Integer.parseInt(args[0]);\n"
+                + "    " + definition.getClassName() + " service = new " + definition.getClassName() + "();\n"
+                + "    TinyRpcServer.Builder builder = TinyRpcServer.builder();\n"
+                + "    TinyRpcTypedProvider.register(builder, SERVICE_ID, \"setEnabled\", values -> { requireNoArguments(values, \"setEnabled\"); return TypedValue.ofBoolean(service.setEnabled()); });\n"
+                + "    TinyRpcTypedProvider.register(builder, SERVICE_ID, \"readEnabled\", values -> { requireNoArguments(values, \"readEnabled\"); return TypedValue.ofBoolean(service.readEnabled()); });\n"
+                + "    TinyRpcTypedProvider.register(builder, SERVICE_ID, \"readActionCount\", values -> { requireNoArguments(values, \"readActionCount\"); return TypedValue.ofInteger(service.readActionCount()); });\n"
+                + "    TinyRpcServer server = builder.build().bind(\"127.0.0.1\", port);\n"
+                + "    Runtime.getRuntime().addShutdownHook(new Thread(server::close, \"generated-provider-shutdown\"));\n"
+                + "    System.out.println(\"{\\\"event\\\":\\\"provider-ready\\\",\\\"catalogId\\\":\\\"local.catalog\\\",\\\"host\\\":\\\"127.0.0.1\\\",\\\"port\\\":\" + server.port() + \",\\\"serviceId\\\":\\\""
+                + javaString(definition.getServiceId()) + "\\\"}\");\n"
+                + "    System.out.flush();\n"
+                + "    new CountDownLatch(1).await();\n"
+                + "  }\n"
+                + "  private static void requireNoArguments(List<TypedValue> values, String operation) {\n"
+                + "    if (values == null || !values.isEmpty()) throw new IllegalArgumentException(operation + \" does not accept arguments\");\n"
+                + "  }\n"
+                + "}\n";
+    }
+
+    private String serviceDescriptor(ServiceDefinition definition) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\n")
+                .append("  \"endpoint\": {\"catalogId\": \"local.catalog\"},\n")
+                .append("  \"metadata\": {\"capabilityState\": \"experimental\"},\n")
+                .append("  \"operations\": [\n");
+        if (definition.getBehavior() == ServiceDefinition.Behavior.STATEFUL_BOOLEAN_DEVICE_V1) {
+            appendDescriptorOperation(json, "setEnabled", "boolean", false);
+            appendDescriptorOperation(json, "readEnabled", "boolean", false);
+            appendDescriptorOperation(json, "readActionCount", "integer", true);
+        } else {
+            for (int index = 0; index < definition.getOperations().size(); index++) {
+                OperationSpec operation = definition.getOperations().get(index);
+                appendDescriptorOperation(json, operation.getName(), contractType(operation.getValueType()),
+                        index == definition.getOperations().size() - 1);
+            }
+        }
+        return json.append("  ],\n")
+                .append("  \"schemaVersion\": \"1.0.1\",\n")
+                .append("  \"serviceId\": \"").append(javaString(definition.getServiceId())).append("\",\n")
+                .append("  \"transport\": {\"kind\": \"tiny-rpc-netty\", \"protocolVersion\": \"1.0.0\"},\n")
+                .append("  \"version\": \"1.0.0\"\n")
+                .append("}\n").toString();
+    }
+
+    private static void appendDescriptorOperation(StringBuilder json, String name, String returns, boolean last) {
+        json.append("    {\"name\": \"").append(javaString(name))
+                .append("\", \"parameters\": [], \"returns\": \"").append(returns).append("\"}")
+                .append(last ? "\n" : ",\n");
+    }
+
+    private static String contractType(OperationSpec.ValueType type) {
+        switch (type) {
+            case BOOLEAN: return "boolean";
+            case INT:
+            case LONG: return "integer";
+            case DOUBLE: return "number";
+            case STRING: return "string";
+            default: throw new IllegalArgumentException("unsupported value type");
+        }
     }
 
     private static String typedValueExpression(String expression, OperationSpec.ValueType type) {

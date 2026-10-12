@@ -16,13 +16,14 @@
     <h2 id="local-service-title">Local service pipeline</h2>
     <p>Generate, compile, start, register, and invoke a typed TinyRPC provider in the local workspace.</p>
     <div class="service-fields">
+        <label>Behavior <select id="service_behavior"><option value="CONSTANT_V1">Constant sensor</option><option value="STATEFUL_BOOLEAN_DEVICE_V1">Stateful boolean device</option></select></label>
         <label>Project <input id="service_project" value="temperature-sensor"></label>
         <label>Service ID <input id="service_id" value="sensor.temperature"></label>
         <label>Package <input id="service_package" value="io.smarthome.generated.sensor"></label>
         <label>Class <input id="service_class" value="TemperatureSensor"></label>
-        <label>Operation <input id="service_operation" value="readCelsius"></label>
-        <label>Type <select id="service_type"><option>DOUBLE</option><option>BOOLEAN</option><option>INT</option><option>LONG</option><option>STRING</option></select></label>
-        <label>Value <input id="service_value" value="21.5"></label>
+        <label class="constant-service-field">Operation <input id="service_operation" value="readCelsius"></label>
+        <label class="constant-service-field">Type <select id="service_type"><option>DOUBLE</option><option>BOOLEAN</option><option>INT</option><option>LONG</option><option>STRING</option></select></label>
+        <label class="constant-service-field">Value <input id="service_value" value="21.5"></label>
     </div>
     <button id="generate_service_button">Run local pipeline</button>
     <pre id="pipeline_result" aria-live="polite">No local pipeline run yet.</pre>

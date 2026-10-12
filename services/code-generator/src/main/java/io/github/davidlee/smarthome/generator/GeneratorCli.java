@@ -9,15 +9,28 @@ public final class GeneratorCli {
     private GeneratorCli() {}
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 8) {
-            System.err.println("usage: GeneratorCli OUTPUT_ROOT PROJECT SERVICE_ID PACKAGE CLASS OPERATION TYPE VALUE");
+        ServiceDefinition definition;
+        int identityOffset;
+        if (args.length == 8) {
+            identityOffset = 0;
+            OperationSpec operation = new OperationSpec(args[5], OperationSpec.ValueType.parse(args[6]), args[7]);
+            definition = new ServiceDefinition(args[2], args[3], args[4], Collections.singletonList(operation));
+        } else if (args.length == 9 && ServiceDefinition.Behavior.CONSTANT_V1.name().equals(args[0])) {
+            identityOffset = 1;
+            OperationSpec operation = new OperationSpec(args[6], OperationSpec.ValueType.parse(args[7]), args[8]);
+            definition = new ServiceDefinition(args[3], args[4], args[5], Collections.singletonList(operation));
+        } else if (args.length == 6 && ServiceDefinition.Behavior.STATEFUL_BOOLEAN_DEVICE_V1.name().equals(args[0])) {
+            identityOffset = 1;
+            definition = ServiceDefinition.statefulBooleanDevice(args[3], args[4], args[5]);
+        } else {
+            System.err.println("usage: GeneratorCli [CONSTANT_V1] OUTPUT_ROOT PROJECT SERVICE_ID PACKAGE CLASS OPERATION TYPE VALUE | "
+                    + "STATEFUL_BOOLEAN_DEVICE_V1 OUTPUT_ROOT PROJECT SERVICE_ID PACKAGE CLASS");
             System.exit(64);
             return;
         }
-        Path outputRoot = Paths.get(args[0]);
-        OperationSpec operation = new OperationSpec(args[5], OperationSpec.ValueType.parse(args[6]), args[7]);
-        ServiceDefinition definition = new ServiceDefinition(args[2], args[3], args[4], Collections.singletonList(operation));
-        GenerationManifest manifest = new GeneratedServiceProjectGenerator(outputRoot).generate(args[1], definition);
+        Path outputRoot = Paths.get(args[identityOffset]);
+        GenerationManifest manifest = new GeneratedServiceProjectGenerator(outputRoot)
+                .generate(args[identityOffset + 1], definition);
         System.out.println(toJson(manifest));
     }
 
