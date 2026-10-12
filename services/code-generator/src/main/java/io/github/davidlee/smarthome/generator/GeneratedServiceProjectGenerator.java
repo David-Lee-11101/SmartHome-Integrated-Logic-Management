@@ -3,6 +3,7 @@ package io.github.davidlee.smarthome.generator;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -20,8 +21,18 @@ public final class GeneratedServiceProjectGenerator {
     private static final Pattern PROJECT_NAME = Pattern.compile("[a-z][a-z0-9-]{0,62}");
     private static final String TEMPLATE_VERSION = "management-provider-v2-stateful-boolean-device";
     private final Path outputRoot;
+    private final AtomicPublisher publisher;
+
+    interface AtomicPublisher {
+        void publish(Path source, Path destination) throws IOException;
+    }
 
     public GeneratedServiceProjectGenerator(Path outputRoot) throws IOException {
+        this(outputRoot, (source, destination) -> Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE));
+    }
+
+    GeneratedServiceProjectGenerator(Path outputRoot, AtomicPublisher publisher) throws IOException {
+        this.publisher = publisher;
         if (Files.isSymbolicLink(outputRoot)) throw new IllegalArgumentException("output root cannot be a symbolic link");
         Files.createDirectories(outputRoot);
         if (Files.isSymbolicLink(outputRoot)) throw new IllegalArgumentException("output root cannot be a symbolic link");
@@ -44,8 +55,9 @@ public final class GeneratedServiceProjectGenerator {
                 Files.write(target, file.getValue());
             }
             try {
-                moveReserved(staging, destination);
-            } catch (java.nio.file.FileSystemException conflict) {
+                publisher.publish(staging, destination);
+            } catch (FileSystemException conflict) {
+                if (conflict instanceof AtomicMoveNotSupportedException || !Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) throw conflict;
                 throw new IllegalArgumentException("project already exists", conflict);
             }
             staging = null;
@@ -256,14 +268,6 @@ public final class GeneratedServiceProjectGenerator {
         for (Path segment : root.relativize(candidate)) {
             current = current.resolve(segment);
             if (Files.isSymbolicLink(current)) throw new IllegalArgumentException("symbolic link path segment rejected");
-        }
-    }
-
-    private static void moveReserved(Path source, Path destination) throws IOException {
-        try {
-            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            Files.move(source, destination);
         }
     }
 

@@ -33,6 +33,16 @@ public class GeneratedServiceProjectGeneratorTest {
                 "device.virtual-switch", "io.smarthome.generated.device", "VirtualSwitch");
     }
 
+    @Test public void unsupportedAtomicPublicationFailsClosedAndCleansStaging() throws Exception {
+        Path root = temporaryFolder.newFolder("unsupported-atomic").toPath();
+        GeneratedServiceProjectGenerator generator = new GeneratedServiceProjectGenerator(root, (source, destination) -> {
+            throw new java.nio.file.AtomicMoveNotSupportedException(source.toString(), destination.toString(), "test filesystem");
+        });
+        assertThrows(java.nio.file.AtomicMoveNotSupportedException.class, () -> generator.generate("temperature-sensor", sensor()));
+        assertFalse(Files.exists(root.resolve("temperature-sensor")));
+        try (java.util.stream.Stream<Path> files = Files.list(root)) { assertEquals(0, files.count()); }
+    }
+
     @Test public void generatesOnlyManifestedPortableSources() throws Exception {
         Path root = temporaryFolder.newFolder("generated").toPath();
         GenerationManifest manifest = new GeneratedServiceProjectGenerator(root).generate("temperature-sensor", sensor());

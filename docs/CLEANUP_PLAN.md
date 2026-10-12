@@ -19,3 +19,10 @@ fallback, skipped host, global sandbox relaxation, or fabricated success is acce
 
 Verify Python, generator Maven tests, TypeScript/security tests, real provider pipeline,
 native/package windows locally, then immutable-head Linux/Windows/macOS CI.
+
+Final review repair: remove ordinary-move fallback from provider publication; require
+atomic filesystem support. Inject an unsupported publisher in a package-private test
+seam and prove staging cleanup plus absent destination. Concurrent destination conflicts
+are normalized only after confirming the destination actually exists; unsupported moves
+and other filesystem errors retain their original evidence. Preserve inherited ISC
+author attribution and terms from immutable historical Electron baseline in RIGHTS.md.
