@@ -40,6 +40,10 @@ const javaReservedWords = new Set(("abstract assert boolean break byte case catc
   + "native new package private protected public return short static strictfp super switch synchronized this throw "
   + "throws transient try void volatile while true false null _").split(" "));
 
+const commonTemplateSymbols = new Set(["String", "Exception", "Integer", "Runtime", "Thread", "System", "IllegalArgumentException",
+  "TypedValue", "TinyRpcTypedProvider", "TinyRpcServer", "List", "CountDownLatch"]);
+const statefulTemplateSymbols = new Set(["Object", "Long", "IllegalStateException"]);
+
 const objectFinalNoArgMethods = new Set(["getClass", "notify", "notifyAll", "wait"]);
 const objectReturnTypes: Record<string, string> = {toString: "STRING", hashCode: "INT", clone: "STRING"};
 
@@ -66,6 +70,10 @@ export function validateLocalServiceRequest(value: unknown): LocalServiceRequest
     packageName: bounded(record.packageName, "packageName", 160, packageName),
     className: bounded(record.className, "className", 64, className),
   };
+  if (commonTemplateSymbols.has(identity.className)
+      || behavior === "STATEFUL_BOOLEAN_DEVICE_V1" && statefulTemplateSymbols.has(identity.className)) {
+    throw new Error("className conflicts with a type used by the provider template");
+  }
   if (identity.packageName.split(".").some(segment => javaReservedWords.has(segment))) {
     throw new Error("packageName contains a Java reserved word");
   }

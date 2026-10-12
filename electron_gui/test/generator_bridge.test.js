@@ -61,6 +61,22 @@ test("constant operation names preserve compilable Object overrides and reject i
   }
 });
 
+test("class names reject actual template symbols while preserving unrelated and behavior-specific valid names", () => {
+  for (const className of ["String", "Exception", "Integer", "Runtime", "Thread", "System", "IllegalArgumentException",
+      "TypedValue", "TinyRpcTypedProvider", "TinyRpcServer", "List", "CountDownLatch"]) {
+    assert.throws(() => validateLocalServiceRequest({...valid, className}), /provider template/);
+    assert.throws(() => validateLocalServiceRequest({...stateful, className}), /provider template/);
+  }
+  for (const className of ["Object", "Long", "IllegalStateException"]) {
+    assert.equal(validateLocalServiceRequest({...valid, className}).className, className);
+    assert.throws(() => validateLocalServiceRequest({...stateful, className}), /provider template/);
+  }
+  for (const className of ["ValueType", "Boolean", "Double", "StringBuilder", "TemperatureSensor"]) {
+    assert.equal(validateLocalServiceRequest({...valid, className}).className, className);
+    assert.equal(validateLocalServiceRequest({...stateful, className}).className, className);
+  }
+});
+
 test("pipeline subprocesses use argument arrays with bounded output and no shell", () => {
   const source = fs.readFileSync(path.join(__dirname, "../src/generator_bridge.ts"), "utf8");
   assert.match(source, /shell: false/);

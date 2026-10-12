@@ -41,3 +41,10 @@ methods. Reproduce inherited final/incompatible return signatures with the actua
 generated method and JavaCompiler before repair; reject these at Java and desktop
 request boundaries before publication. Preserve toString/STRING, hashCode/INT,
 clone/STRING covariant return, and nonconflicting equals() no-argument overload.
+
+Final template-symbol boundary repair: reproduce String literal/main-signature shadowing
+and TypedValue imported-name collision from actual generated source with JavaCompiler.
+Reject only names used/imported by the selected template before writing files, mirrored
+at the desktop boundary. Preserve Object/Long/IllegalStateException for the constant
+template and unrelated names such as ValueType/Boolean/Double/StringBuilder. No import
+resolver or alias layer; no further static expansion after focused tests/review pass.

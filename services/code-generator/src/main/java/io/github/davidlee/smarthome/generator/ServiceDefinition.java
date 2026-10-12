@@ -1,6 +1,7 @@
 package io.github.davidlee.smarthome.generator;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import javax.lang.model.SourceVersion;
 import java.util.Collections;
 import java.util.HashSet;
@@ -13,6 +14,13 @@ public final class ServiceDefinition {
     private static final Pattern SERVICE_ID = Pattern.compile("[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*");
     private static final Pattern PACKAGE_NAME = Pattern.compile("[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+");
     private static final Pattern CLASS_NAME = Pattern.compile("[A-Z][A-Za-z0-9]{0,63}");
+
+    // Names resolved unqualified by both emitted provider templates.
+    private static final Set<String> COMMON_TEMPLATE_SYMBOLS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "String", "Exception", "Integer", "Runtime", "Thread", "System", "IllegalArgumentException",
+            "TypedValue", "TinyRpcTypedProvider", "TinyRpcServer", "List", "CountDownLatch")));
+    private static final Set<String> STATEFUL_TEMPLATE_SYMBOLS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "Object", "Long", "IllegalStateException")));
 
     public enum Behavior {
         CONSTANT_V1,
@@ -51,6 +59,10 @@ public final class ServiceDefinition {
         }
         if (className == null || !CLASS_NAME.matcher(className).matches()) {
             throw new IllegalArgumentException("className has an invalid format");
+        }
+        if (COMMON_TEMPLATE_SYMBOLS.contains(className)
+                || behavior == Behavior.STATEFUL_BOOLEAN_DEVICE_V1 && STATEFUL_TEMPLATE_SYMBOLS.contains(className)) {
+            throw new IllegalArgumentException("className conflicts with a type used by the provider template: " + className);
         }
         Objects.requireNonNull(operations, "operations");
         this.behavior = Objects.requireNonNull(behavior, "behavior");
