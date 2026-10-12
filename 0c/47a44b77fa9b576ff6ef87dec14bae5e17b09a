@@ -1,0 +1,52 @@
+services/code-generator/src/test/java/io/github/davidlee/smarthome/generator/GeneratedServiceProjectGeneratorTest.java
+  s_7011714e525495::t_0957175427d091 82
+  s_7011714e525495::t_b5c1599904ec79 31-35,40,43,50-71,81
+electron_gui/tools/validate-service-descriptor.mjs
+  s_7011714e525495::t_96f5a568faf856 1-34
+README.md
+  s_7011714e525495::t_521528c3e885e2 24-26,76,96-98
+docs/architecture/overview.md
+  s_7011714e525495::t_521528c3e885e2 13-16,55-56
+electron_gui/assets/index.html
+  s_7011714e525495::t_ec7c8b040f1718 19,24-26
+electron_gui/assets/script.js
+  s_7011714e525495::t_ec7c8b040f1718 11,16-21,28-37
+  s_7011714e525495::t_8d82fc82b05553 38
+electron_gui/src/generator_bridge.ts
+  s_7011714e525495::t_9bc7ca1951d567 5,10-13,19-24,29,51-55,60-73,191-194,212-215,227-246,254-259
+  s_7011714e525495::t_c45469f1dcf52c 129-139,247-253
+  s_7011714e525495::t_fdd96be94243d9 75
+docs/research/evidence-boundaries.md
+  s_7011714e525495::t_521528c3e885e2 7-8
+services/code-generator/src/main/java/io/github/davidlee/smarthome/generator/GeneratorCli.java
+  s_7011714e525495::t_a22d2bc1c2519b 12-27,31-33
+electron_gui/test/generator_bridge.test.js
+  s_7011714e525495::t_e58623e984c1f8 55-57
+  s_7011714e525495::t_b5c1599904ec79 17-24,26-28,39,43-44
+electron_gui/tools/verify-local-pipeline.mjs
+  s_7011714e525495::t_96f5a568faf856 12,21-32,35-37,39,47-54,57
+services/code-generator/src/main/java/io/github/davidlee/smarthome/generator/GeneratedServiceProjectGenerator.java
+  s_7011714e525495::t_1b83e22b09a196 21,55-56,67,88-94,100,116-118,126-128,133-216
+  s_7011714e525495::t_a6e0229a33da43 217
+.github/workflows/ci.yml
+  s_7011714e525495::t_de6ae2e17a4830 13-14,128-131,153
+services/code-generator/src/main/java/io/github/davidlee/smarthome/generator/ServiceDefinition.java
+  s_7011714e525495::t_3b8517894a5f41 16-20,22,24-29,34,37-41,52-57,69-73,78
+  s_7011714e525495::t_f0d0d1a006cc3e 21,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0c47a44b77fa9b576ff6ef87dec14bae5e17b09a",
+  "prompts": {},
+  "sessions": {
+    "s_7011714e525495": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12529-718f-7053-849a-2fa10f2720ee",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "David Lee <109534658+David-Lee-11101@users.noreply.github.com>"
+    }
+  }
+}
