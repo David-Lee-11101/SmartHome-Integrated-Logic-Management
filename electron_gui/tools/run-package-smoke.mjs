@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {spawn} from "node:child_process";
+import {routeElectronSmoke} from "./electron-smoke-route.mjs";
 
 const packageIndex = process.argv.indexOf("--package");
 if (packageIndex < 0 || !process.argv[packageIndex + 1]) throw new Error("--package is required");
@@ -14,7 +15,9 @@ const taskRoot = fs.mkdtempSync(path.join(os.tmpdir(), "smarthome-management-smo
 const workspace = path.join(taskRoot, "workspace");
 const report = path.join(taskRoot, "report.json");
 fs.mkdirSync(workspace);
-const child = spawn(executable, ["--self-check", "--offline", "--report", report, "--workspace", workspace], {stdio: ["ignore", "pipe", "pipe"]});
+const appArguments = ["--self-check", "--offline", "--report", report, "--workspace", workspace];
+const {command, args} = routeElectronSmoke(executable, appArguments);
+const child = spawn(command, args, {stdio: ["ignore", "pipe", "pipe"], shell: false});
 let stderr = "";
 child.stderr.on("data", chunk => { if (stderr.length < 65536) stderr += String(chunk); });
 const timeout = setTimeout(() => child.kill("SIGTERM"), 30000);
