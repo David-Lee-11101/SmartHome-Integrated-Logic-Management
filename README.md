@@ -52,7 +52,7 @@ home traffic or control real devices by default.
 
 ## Local verification
 
-Prerequisites are explicit: Node.js 22, npm, Java 8, Maven, the sibling Communication
+Prerequisites are explicit: Node.js 22, npm, JDK 21 (Java 8 bytecode target), Maven, the sibling Communication
 and Logic Engine artifacts installed at their pinned component commits, and a clean
 Maven Central settings file. No Python, Java, or Maven runtime is downloaded silently
 by the application.
@@ -65,6 +65,7 @@ mvn test
 
 cd ../../electron_gui
 npm ci
+node node_modules/electron/install.js
 npm test
 npm audit --audit-level=high
 ```

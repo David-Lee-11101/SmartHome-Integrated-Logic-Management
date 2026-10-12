@@ -196,7 +196,7 @@ function writeCatalog(workspaceRoot: string, provider: Record<string, unknown>, 
   fs.renameSync(temporary, catalogPath);
 }
 
-export async function generateBuildStartInvoke(applicationRoot: string, workspaceRoot: string, unsafeRequest: unknown): Promise<LocalPipelineResult> {
+export async function startGeneratedService(applicationRoot: string, workspaceRoot: string, unsafeRequest: unknown) {
   const request = validateLocalServiceRequest(unsafeRequest);
   const java = process.env.MANAGEMENT_JAVA ?? "java";
   const maven = process.env.MANAGEMENT_MAVEN ?? "mvn";
@@ -227,6 +227,19 @@ export async function generateBuildStartInvoke(applicationRoot: string, workspac
     const invoke = async (operation: string, argumentsJson = "[]") => parseSingleJsonLine(
       await runBounded(java, ["-cp", classpath, "io.smarthome.logic.tinyrpc.TinyRpcLogicCli", "invoke", "127.0.0.1", String(provider.port), request.serviceId, operation, argumentsJson], projectRoot, 15000),
       "invocation-result");
+    return {generationManifest, provider, catalogId: "local.catalog" as const, invoke,
+      close: () => terminateBounded(providerProcess, 5000)};
+  } catch (error) {
+    await terminateBounded(providerProcess, 5000);
+    throw error;
+  }
+}
+
+export async function generateBuildStartInvoke(applicationRoot: string, workspaceRoot: string, unsafeRequest: unknown): Promise<LocalPipelineResult> {
+  const request = validateLocalServiceRequest(unsafeRequest);
+  const session = await startGeneratedService(applicationRoot, workspaceRoot, request);
+  const {generationManifest, provider, invoke} = session;
+  try {
     if (request.behavior === "STATEFUL_BOOLEAN_DEVICE_V1") {
       const initialEnabled = await invoke("readEnabled");
       const initialCount = await invoke("readActionCount");
@@ -260,6 +273,6 @@ export async function generateBuildStartInvoke(applicationRoot: string, workspac
     if (invocation.status !== "success") throw new Error("Logic Engine invocation did not succeed");
     return {generationManifest, provider, invocation, catalogId: "local.catalog"};
   } finally {
-    await terminateBounded(providerProcess, 5000);
+    await session.close();
   }
 }

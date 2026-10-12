@@ -18,8 +18,13 @@ production-window checks.
 The release gate uses `macos-15`, `ubuntu-24.04`, and `windows-2022`, then asserts the
 runtime architecture before doing any build work. GitHub's runner-image announcement
 identifies `macos-15` as the Apple Silicon label for GitHub Actions; the assertion keeps
-the gate closed if routing changes. Linux enables Electron's setuid Chromium sandbox
-and does not pass `--no-sandbox`.
+the gate closed if routing changes. Electron 44 exposes an explicit binary installer instead of an npm postinstall script.
+CI runs the pinned package's `install.js` after `npm ci`, then checks and enables the
+normal Linux setuid Chromium sandbox helper. No global AppArmor or kernel restriction
+is changed, and no sandbox-disabling switch is passed.
+
+JDK 21 supplies a native ARM64 runtime on macOS; generators retain Java 8 source/target
+compatibility. The workflow does not claim to execute a Java 8 ARM64 runtime.
 
 - [macOS 15 runner announcement](https://github.com/actions/runner-images/issues/11486)
 
