@@ -1,0 +1,25 @@
+electron_gui/test/smoke-routing.test.js
+  s_7011714e525495::t_d19da250e8426e 1-21
+electron_gui/tools/run-package-smoke.mjs
+  s_7011714e525495::t_d19da250e8426e 5,18-20
+electron_gui/tools/electron-smoke-route.mjs
+  s_7011714e525495::t_d19da250e8426e 1-9
+electron_gui/tools/run-native-smoke.mjs
+  s_7011714e525495::t_d19da250e8426e 6,20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "8848385584469410de335e806ccb992bd97934b4",
+  "prompts": {},
+  "sessions": {
+    "s_7011714e525495": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12529-718f-7053-849a-2fa10f2720ee",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "David Lee <109534658+David-Lee-11101@users.noreply.github.com>"
+    }
+  }
+}
