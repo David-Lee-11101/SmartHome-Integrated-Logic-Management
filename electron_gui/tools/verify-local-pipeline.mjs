@@ -20,6 +20,17 @@ const constantProof = await generateBuildStartInvoke(applicationRoot, workspace,
 });
 if (constantProof.invocation?.status !== "success") throw new Error("real Logic Engine invocation failed");
 if (constantProof.invocation?.value?.type !== "number" || constantProof.invocation?.value?.value !== 21.5) throw new Error("unexpected typed invocation result");
+const integralProof = await generateBuildStartInvoke(applicationRoot, workspace, {
+  projectName: "decimal-counter",
+  serviceId: "sensor.decimal-counter",
+  packageName: "io.smarthome.generated.decimal",
+  className: "DecimalCounter",
+  operation: "readCount",
+  valueType: "INT",
+  value: "012",
+});
+if (integralProof.invocation?.status !== "success" || integralProof.invocation?.value?.type !== "integer"
+    || integralProof.invocation?.value?.value !== 12) throw new Error("generated integer changed the validated decimal value");
 const proof = await generateBuildStartInvoke(applicationRoot, workspace, {
   projectName: "virtual-switch",
   serviceId: "device.virtual-switch",
@@ -45,6 +56,7 @@ const publicProof = {
   assignedPort: Number(proof.provider.port) > 0,
   invocation: proof.invocation,
   constantInvocation: constantProof.invocation,
+  integralInvocation: integralProof.invocation,
   statefulProof: proof.statefulProof,
   contract: {
     serviceDescriptorSchemaVersion: "1.0.1",

@@ -37,15 +37,13 @@ public final class OperationSpec {
                 if (!"true".equals(value) && !"false".equals(value)) throw new IllegalArgumentException("invalid boolean");
                 break;
             case INT:
-                Integer.parseInt(value);
-                break;
+                return Integer.toString(Integer.parseInt(value));
             case LONG:
-                Long.parseLong(value);
-                break;
+                return Long.toString(Long.parseLong(value));
             case DOUBLE:
                 double parsed = Double.parseDouble(value);
                 if (!Double.isFinite(parsed)) throw new IllegalArgumentException("double must be finite");
-                break;
+                return Double.toString(parsed);
             case STRING:
                 break;
             default:

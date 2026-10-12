@@ -26,3 +26,8 @@ seam and prove staging cleanup plus absent destination. Concurrent destination c
 are normalized only after confirming the destination actually exists; unsupported moves
 and other filesystem errors retain their original evidence. Preserve inherited ISC
 author attribution and terms from immutable historical Electron baseline in RIGHTS.md.
+
+Numeric boundary review: preserve parsed numeric values in Java source. Canonicalize
+INT/LONG/DOUBLE after validation to prevent octal interpretation and float suffix
+rounding; lock signs, leading zero, negative zero, bounds and overflow with unit tests
+and compile/start/invoke a real generated INT service returning decimal 12 for "012".
